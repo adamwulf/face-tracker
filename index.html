@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Tracker - Webcam Face Detection</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .container {
+            position: relative;
+            border: 2px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        
+        #video {
+            display: block;
+            width: 640px;
+            height: 480px;
+        }
+        
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .feature-toggle {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .feature-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+        
+        input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+        
+        .cartoon-container {
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .cartoon-wrapper {
+            position: relative;
+            display: inline-block;
+            border: 2px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            width: 400px;
+            height: 400px;
+        }
+        
+        .cartoon-wrapper img {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .animation-controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .slider-container label {
+            font-size: 14px;
+            min-width: 80px;
+        }
+        
+        input[type="range"] {
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎭 Face Tracker</h1>
+    
+    <div class="container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+    </div>
+    
+    <div class="cartoon-container">
+        <h2>🎭 Animated Cartoon Face</h2>
+        <div class="cartoon-wrapper">
+            <img id="cartoon-bg" src="facecam-1.png" alt="Cartoon Face Background" style="width: 400px; height: 400px; object-fit: cover;">
+            <svg id="cartoon-svg" width="400" height="400" viewBox="0 0 400 400" style="position: absolute; top: 0; left: 0; pointer-events: none;">
+                <!-- Debug Layer - Bounding boxes -->
+                <g id="debug-layer">
+                    <!-- Will show target frame and original bounding box -->
+                </g>
+
+                <!-- Eyes Layer - Custom eye images -->
+                <g id="eyes-layer">
+                    <image id="left-eye" href="eye-left.png" x="0" y="0" width="30" height="30" style="transform-origin: center;"/>
+                    <image id="right-eye" href="eye-right.png" x="0" y="0" width="30" height="30" style="transform-origin: center;"/>
+                </g>
+
+                <!-- Mouth Layer - Will use the same mesh as camera overlay -->
+                <g id="mouth-layer">
+                    <!-- This will be populated with the same mouth landmarks as the camera -->
+                </g>
+            </svg>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button id="startBtn">Start Camera</button>
+        <button id="stopBtn" disabled>Stop Camera</button>
+    </div>
+    
+    <div class="feature-toggle">
+        <label>
+            <input type="checkbox" id="showEyes" checked>
+            👁️ Eyes
+        </label>
+        <label>
+            <input type="checkbox" id="showMouth" checked>
+            👄 Mouth
+        </label>
+        <label>
+            <input type="checkbox" id="showNose" checked>
+            👃 Nose
+        </label>
+        <label>
+            <input type="checkbox" id="showEars" checked>
+            👂 Ears
+        </label>
+    </div>
+    
+    <div class="animation-controls">
+        <div class="slider-container">
+            <label>Animation Intensity:</label>
+            <input type="range" id="animationIntensity" min="0" max="2" step="0.1" value="1">
+            <span id="intensityValue">1.0</span>
+        </div>
+        <div class="slider-container">
+            <label>Eye Sensitivity:</label>
+            <input type="range" id="eyeSensitivity" min="0" max="3" step="0.1" value="1">
+            <span id="eyeValue">1.0</span>
+        </div>
+        <div class="slider-container">
+            <label>Mouth Sensitivity:</label>
+            <input type="range" id="mouthSensitivity" min="0" max="3" step="0.1" value="1">
+            <span id="mouthValue">1.0</span>
+        </div>
+        <div class="slider-container">
+            <label>Head Rotation:</label>
+            <input type="range" id="headRotation" min="0" max="2" step="0.1" value="1">
+            <span id="headValue">1.0</span>
+        </div>
+        <div class="slider-container">
+            <label>Blink Frequency:</label>
+            <input type="range" id="blinkFrequency" min="0" max="3" step="0.1" value="1">
+            <span id="blinkValue">1.0</span>
+        </div>
+    </div>
+    
+    <div class="status" id="status">Click "Start Camera" to begin face tracking</div>
+
+    <!-- MediaPipe Face Mesh -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+    
+    <script>
+        class FaceTracker {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.faceMesh = null;
+                this.isRunning = false;
+                
+                // Cartoon animation properties
+                this.cartoonElements = {
+                    leftEye: document.getElementById('left-eye'),
+                    rightEye: document.getElementById('right-eye'),
+                    mouthLayer: document.getElementById('mouth-layer'),
+                    debugLayer: document.getElementById('debug-layer')
+                };
+                
+                // Animation smoothing
+                this.smoothingFactor = 0.3;
+                this.lastPositions = {};
+
+                // Original PNG dimensions and rendered size
+                const originalPngWidth = 310;
+                const originalPngHeight = 258;
+                const renderedSize = 400; // Square container
+
+                // Calculate scaling for object-fit: cover
+                // The image maintains aspect ratio and covers the container
+                const scaleX = renderedSize / originalPngWidth;
+                const scaleY = renderedSize / originalPngHeight;
+                const scale = Math.max(scaleX, scaleY); // Use larger scale to "cover"
+
+                // Calculate actual rendered image dimensions
+                const renderedImageWidth = originalPngWidth * scale;
+                const renderedImageHeight = originalPngHeight * scale;
+
+                // Calculate offset due to centering (object-fit: cover centers the image)
+                const offsetX = (renderedImageWidth - renderedSize) / 2;
+                const offsetY = (renderedImageHeight - renderedSize) / 2;
+
+                // Target frame coordinates in original PNG (provided by user)
+                const originalTargetFrame = {
+                    x: 110,
+                    y: 80,
+                    width: 110,
+                    height: 105
+                };
+
+                // Scale target frame to rendered size and adjust for offset
+                this.targetFrame = {
+                    x: originalTargetFrame.x * scale - offsetX,
+                    y: originalTargetFrame.y * scale - offsetY,
+                    width: originalTargetFrame.width * scale,
+                    height: originalTargetFrame.height * scale
+                };
+
+                // Blinking system - both eyes blink together
+                this.blinkImages = ['eye-blink-1.png', 'eye-blink-2.png'];
+                this.blinkTimer = {
+                    nextBlink: 0,
+                    isBlinking: false,
+                    blinkStart: 0
+                };
+                this.blinkDuration = 150; // milliseconds
+                this.minBlinkInterval = 2000; // minimum 2 seconds between blinks
+                this.maxBlinkInterval = 5000; // maximum 5 seconds between blinks
+                
+                this.setupEventListeners();
+                this.setupMediaPipe();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('startBtn').addEventListener('click', () => this.start());
+                document.getElementById('stopBtn').addEventListener('click', () => this.stop());
+                
+                // Feature toggles
+                ['showEyes', 'showMouth', 'showNose', 'showEars'].forEach(id => {
+                    document.getElementById(id).addEventListener('change', () => this.updateSettings());
+                });
+                
+                // Animation controls
+                document.getElementById('animationIntensity').addEventListener('input', (e) => {
+                    document.getElementById('intensityValue').textContent = e.target.value;
+                });
+                document.getElementById('eyeSensitivity').addEventListener('input', (e) => {
+                    document.getElementById('eyeValue').textContent = e.target.value;
+                });
+                document.getElementById('mouthSensitivity').addEventListener('input', (e) => {
+                    document.getElementById('mouthValue').textContent = e.target.value;
+                });
+                document.getElementById('headRotation').addEventListener('input', (e) => {
+                    document.getElementById('headValue').textContent = e.target.value;
+                });
+                document.getElementById('blinkFrequency').addEventListener('input', (e) => {
+                    document.getElementById('blinkValue').textContent = e.target.value;
+                    this.updateBlinkFrequency(parseFloat(e.target.value));
+                });
+            }
+            
+            async setupMediaPipe() {
+                this.faceMesh = new FaceMesh({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                    }
+                });
+                
+                this.faceMesh.setOptions({
+                    maxNumFaces: 1,
+                    refineLandmarks: true,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+                
+                this.faceMesh.onResults((results) => this.onResults(results));
+            }
+            
+            async start() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 640, height: 480 } 
+                    });
+                    
+                    this.video.srcObject = stream;
+                    this.isRunning = true;
+                    
+                    // Update button states
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    document.getElementById('status').textContent = 'Camera started - detecting faces...';
+                    
+                    // Start processing
+                    this.processFrame();
+                    
+                } catch (error) {
+                    console.error('Error accessing camera:', error);
+                    document.getElementById('status').textContent = 'Error: Could not access camera';
+                }
+            }
+            
+            stop() {
+                if (this.video.srcObject) {
+                    this.video.srcObject.getTracks().forEach(track => track.stop());
+                    this.video.srcObject = null;
+                }
+                
+                this.isRunning = false;
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Update button states
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('status').textContent = 'Camera stopped';
+            }
+            
+            async processFrame() {
+                if (!this.isRunning) return;
+                
+                if (this.video.readyState === this.video.HAVE_ENOUGH_DATA) {
+                    await this.faceMesh.send({ image: this.video });
+                }
+                
+                requestAnimationFrame(() => this.processFrame());
+            }
+            
+            onResults(results) {
+                // Set canvas size to match video
+                this.canvas.width = this.video.videoWidth;
+                this.canvas.height = this.video.videoHeight;
+                
+                // Clear canvas
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                    results.multiFaceLandmarks.forEach(landmarks => {
+                        this.drawFaceFeatures(landmarks);
+                        this.animateCartoon(landmarks); // Add cartoon animation
+                    });
+                    
+                    document.getElementById('status').textContent = 
+                        `Detected ${results.multiFaceLandmarks.length} face(s) - Cartoon animated!`;
+                } else {
+                    document.getElementById('status').textContent = 'No faces detected';
+                }
+            }
+            
+            drawFaceFeatures(landmarks) {
+                // MediaPipe Face Mesh provides 468 facial landmarks
+                // Convert normalized coordinates to canvas coordinates
+                const canvasWidth = this.canvas.width;
+                const canvasHeight = this.canvas.height;
+                
+                // Draw facial features based on toggles using actual landmark positions
+                this.drawEyes(landmarks, canvasWidth, canvasHeight);
+                this.drawMouth(landmarks, canvasWidth, canvasHeight);
+                this.drawNose(landmarks, canvasWidth, canvasHeight);
+                this.drawEars(landmarks, canvasWidth, canvasHeight);
+            }
+            
+            drawEyes(landmarks, canvasWidth, canvasHeight) {
+                if (!document.getElementById('showEyes').checked) return;
+                
+                // MediaPipe eye landmarks
+                // Left eye: 33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246
+                // Right eye: 362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398
+                
+                const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+                const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+                
+                this.ctx.fillStyle = '#ff6b6b';
+                this.ctx.strokeStyle = '#ff6b6b';
+                this.ctx.lineWidth = 3;
+                
+                // Draw left eye
+                this.ctx.beginPath();
+                leftEyeIndices.forEach((index, i) => {
+                    const landmark = landmarks[index];
+                    const x = landmark.x * canvasWidth;
+                    const y = landmark.y * canvasHeight;
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                });
+                this.ctx.closePath();
+                this.ctx.stroke();
+                
+                // Draw right eye
+                this.ctx.beginPath();
+                rightEyeIndices.forEach((index, i) => {
+                    const landmark = landmarks[index];
+                    const x = landmark.x * canvasWidth;
+                    const y = landmark.y * canvasHeight;
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                });
+                this.ctx.closePath();
+                this.ctx.stroke();
+            }
+            
+            drawMouth(landmarks, canvasWidth, canvasHeight) {
+                if (!document.getElementById('showMouth').checked) return;
+                
+                // Inner lip contour only
+                const fullMouthIndices = [0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61, 185, 40, 39, 37, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82];
+                
+                // Use only the inner lip landmarks (indices 20-39)
+                const mouthIndices = fullMouthIndices.slice(20, 40);
+                console.log(mouthIndices.length);
+                mouthIndices.splice(1, 10);
+                console.log(mouthIndices.length);
+                this.ctx.strokeStyle = '#4ecdc4';
+                this.ctx.lineWidth = 3;
+                
+                this.ctx.beginPath();
+                mouthIndices.forEach((index, i) => {
+                    const landmark = landmarks[index];
+                    const x = landmark.x * canvasWidth;
+                    const y = landmark.y * canvasHeight;
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                });
+                this.ctx.closePath();
+                this.ctx.stroke();
+            }
+            
+            drawNose(landmarks, canvasWidth, canvasHeight) {
+                if (!document.getElementById('showNose').checked) return;
+                
+                // MediaPipe nose landmarks
+                const noseIndices = [1, 2, 5, 4, 6, 19, 20, 94, 125, 141, 235, 236, 3, 51, 48, 115, 131, 134, 102, 49, 220, 305, 281, 360, 279];
+                
+                this.ctx.strokeStyle = '#ffe66d';
+                this.ctx.lineWidth = 3;
+                
+                this.ctx.beginPath();
+                noseIndices.forEach((index, i) => {
+                    const landmark = landmarks[index];
+                    const x = landmark.x * canvasWidth;
+                    const y = landmark.y * canvasHeight;
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                });
+                this.ctx.closePath();
+                this.ctx.stroke();
+            }
+            
+            drawEars(landmarks, canvasWidth, canvasHeight) {
+                if (!document.getElementById('showEars').checked) return;
+                
+                // MediaPipe ear landmarks (approximate positions)
+                // Note: MediaPipe doesn't have specific ear landmarks, so we'll use face contour points
+                const leftEarIndices = [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323];
+                const rightEarIndices = [454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93];
+                
+                this.ctx.strokeStyle = '#a8e6cf';
+                this.ctx.lineWidth = 3;
+                
+                // Draw left ear area
+                this.ctx.beginPath();
+                leftEarIndices.forEach((index, i) => {
+                    const landmark = landmarks[index];
+                    const x = landmark.x * canvasWidth;
+                    const y = landmark.y * canvasHeight;
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                });
+                this.ctx.stroke();
+                
+                // Draw right ear area
+                this.ctx.beginPath();
+                rightEarIndices.forEach((index, i) => {
+                    const landmark = landmarks[index];
+                    const x = landmark.x * canvasWidth;
+                    const y = landmark.y * canvasHeight;
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                });
+                this.ctx.stroke();
+            }
+            
+            updateSettings() {
+                // Settings are checked in draw methods
+            }
+            
+            updateBlinkFrequency(frequency) {
+                // Adjust blink intervals based on frequency (0-3)
+                // Higher frequency = more frequent blinks
+                const baseMin = 2000;
+                const baseMax = 5000;
+                
+                this.minBlinkInterval = baseMin / frequency;
+                this.maxBlinkInterval = baseMax / frequency;
+            }
+            
+            // Cartoon Animation Methods
+            animateCartoon(landmarks) {
+                if (!landmarks || landmarks.length === 0) return;
+
+                // Calculate face bounding box once per frame
+                const faceBoundingBox = this.calculateFaceBoundingBox(landmarks);
+
+                // Draw debug visualization
+                this.drawDebugBoxes(faceBoundingBox);
+
+                const intensity = parseFloat(document.getElementById('animationIntensity').value);
+                const eyeSensitivity = parseFloat(document.getElementById('eyeSensitivity').value);
+                const mouthSensitivity = parseFloat(document.getElementById('mouthSensitivity').value);
+
+                this.animateEyes(landmarks, faceBoundingBox, intensity * eyeSensitivity);
+                this.animateMouth(landmarks, faceBoundingBox, intensity * mouthSensitivity);
+                this.animateHeadRotation(landmarks, intensity * parseFloat(document.getElementById('headRotation').value));
+            }
+
+            drawDebugBoxes(faceBoundingBox) {
+                // Clear previous debug visualization
+                this.cartoonElements.debugLayer.innerHTML = '';
+
+                // Draw target frame box (blue) - where features should be mapped to
+                const targetBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                targetBox.setAttribute('x', this.targetFrame.x);
+                targetBox.setAttribute('y', this.targetFrame.y);
+                targetBox.setAttribute('width', this.targetFrame.width);
+                targetBox.setAttribute('height', this.targetFrame.height);
+                targetBox.setAttribute('fill', 'none');
+                targetBox.setAttribute('stroke', 'blue');
+                targetBox.setAttribute('stroke-width', '2');
+                this.cartoonElements.debugLayer.appendChild(targetBox);
+
+                // Draw original bounding box (red) - scaled to 400x400
+                const originalBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                originalBox.setAttribute('x', faceBoundingBox.minX * 400);
+                originalBox.setAttribute('y', faceBoundingBox.minY * 400);
+                originalBox.setAttribute('width', faceBoundingBox.width * 400);
+                originalBox.setAttribute('height', faceBoundingBox.height * 400);
+                originalBox.setAttribute('fill', 'none');
+                originalBox.setAttribute('stroke', 'red');
+                originalBox.setAttribute('stroke-width', '2');
+                this.cartoonElements.debugLayer.appendChild(originalBox);
+            }
+            
+            animateEyes(landmarks, faceBoundingBox, sensitivity) {
+                // Get eye landmarks
+                const leftEyeCenter = this.getEyeCenter(landmarks, 'left');
+                const rightEyeCenter = this.getEyeCenter(landmarks, 'right');
+
+                if (leftEyeCenter && rightEyeCenter) {
+                    // Transform eye centers to target frame using bounding box
+                    const leftTransformed = this.transformLandmarkToTargetFrame(leftEyeCenter, faceBoundingBox);
+                    const rightTransformed = this.transformLandmarkToTargetFrame(rightEyeCenter, faceBoundingBox);
+
+                    // Apply smoothing to prevent jittery movement
+                    const smoothLeft = this.smoothPosition('leftEye', leftTransformed);
+                    const smoothRight = this.smoothPosition('rightEye', rightTransformed);
+
+                    // Handle blinking for both eyes together
+                    this.updateEyeBlinking(smoothLeft, smoothRight);
+                }
+            }
+            
+            updateEyeBlinking(leftPosition, rightPosition) {
+                const now = Date.now();
+                const timer = this.blinkTimer;
+                
+                // Check if it's time to start a new blink
+                if (!timer.isBlinking && now >= timer.nextBlink) {
+                    timer.isBlinking = true;
+                    timer.blinkStart = now;
+                    // Randomly select a blink image for both eyes
+                    const randomBlinkImage = this.blinkImages[Math.floor(Math.random() * this.blinkImages.length)];
+                    this.cartoonElements.leftEye.setAttribute('href', randomBlinkImage);
+                    this.cartoonElements.rightEye.setAttribute('href', randomBlinkImage);
+                }
+                
+                // Check if blink should end
+                if (timer.isBlinking && (now - timer.blinkStart) >= this.blinkDuration) {
+                    timer.isBlinking = false;
+                    // Schedule next blink
+                    const randomInterval = this.minBlinkInterval + 
+                        Math.random() * (this.maxBlinkInterval - this.minBlinkInterval);
+                    timer.nextBlink = now + randomInterval;
+                    // Return both eyes to normal images
+                    this.cartoonElements.leftEye.setAttribute('href', 'eye-left.png');
+                    this.cartoonElements.rightEye.setAttribute('href', 'eye-right.png');
+                }
+                
+                // Update eye positions
+                this.cartoonElements.leftEye.setAttribute('x', leftPosition.x - 15);
+                this.cartoonElements.leftEye.setAttribute('y', leftPosition.y - 15);
+                this.cartoonElements.rightEye.setAttribute('x', rightPosition.x - 15);
+                this.cartoonElements.rightEye.setAttribute('y', rightPosition.y - 15);
+            }
+            
+            animateMouth(landmarks, faceBoundingBox, sensitivity) {
+                // Use MediaPipe's inner lip landmarks for better accuracy
+                // These are the specific landmarks for the inner lip contour
+                const fullMouthIndices = [0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61, 185, 40, 39, 37, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82];
+
+                // Use only the inner lip landmarks (indices 20-39)
+                const mouthIndices = fullMouthIndices.slice(20, 40);
+
+                // Clear previous mouth path
+                this.cartoonElements.mouthLayer.innerHTML = '';
+
+                // Create mouth path using transformed landmarks
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('stroke', '#4ecdc4');
+                path.setAttribute('stroke-width', '3');
+                path.setAttribute('fill', 'none');
+
+                let pathData = '';
+                mouthIndices.forEach((index, i) => {
+                    const landmark = landmarks[index];
+                    // Transform landmark to target frame
+                    const transformed = this.transformLandmarkToTargetFrame(landmark, faceBoundingBox);
+                    if (i === 0) {
+                        pathData += `M${transformed.x} ${transformed.y}`;
+                    } else {
+                        pathData += ` L${transformed.x} ${transformed.y}`;
+                    }
+                });
+                pathData += ' Z'; // Close the path
+
+                path.setAttribute('d', pathData);
+                this.cartoonElements.mouthLayer.appendChild(path);
+            }
+            
+            animateHeadRotation(landmarks, sensitivity) {
+                // Calculate head rotation using key facial landmarks
+                const noseTip = landmarks[1];
+                const leftEye = landmarks[33];
+                const rightEye = landmarks[362];
+                
+                if (noseTip && leftEye && rightEye) {
+                    // Calculate yaw (left/right head turn)
+                    const yaw = (noseTip.x - 0.5) * sensitivity * 30; // -30 to +30 degrees
+                    
+                    // Calculate pitch (up/down head tilt)
+                    const pitch = (noseTip.y - 0.5) * sensitivity * 15; // -15 to +15 degrees
+                    
+                    // Apply rotation to the entire cartoon
+                    const cartoonSvg = document.getElementById('cartoon-svg');
+                    cartoonSvg.style.transform = `rotateY(${yaw}deg) rotateX(${pitch}deg)`;
+                    cartoonSvg.style.transformOrigin = 'center center';
+                    
+                    // Flip the background PNG based on head turn
+                    const backgroundImg = document.getElementById('cartoon-bg');
+                    const headRotation = parseFloat(document.getElementById('headRotation').value);
+                    
+                    if (yaw > 5) {
+                        // Turned right - flip horizontally
+                        backgroundImg.style.transform = 'scaleX(-1)';
+                    } else if (yaw < -5) {
+                        // Turned left - normal orientation
+                        backgroundImg.style.transform = 'scaleX(1)';
+                    } else {
+                        // Facing forward - normal orientation
+                        backgroundImg.style.transform = 'scaleX(1)';
+                    }
+                }
+            }
+            
+            getEyeCenter(landmarks, side) {
+                const eyeIndices = side === 'left' 
+                    ? [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+                    : [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+                
+                let sumX = 0, sumY = 0;
+                let count = 0;
+                
+                eyeIndices.forEach(index => {
+                    if (landmarks[index]) {
+                        sumX += landmarks[index].x;
+                        sumY += landmarks[index].y;
+                        count++;
+                    }
+                });
+                
+                return count > 0 ? { x: sumX / count, y: sumY / count } : null;
+            }
+            
+            getFaceCenter(landmarks) {
+                // Use nose tip as face center
+                const noseTip = landmarks[1];
+                return noseTip ? { x: noseTip.x, y: noseTip.y } : { x: 0.5, y: 0.5 };
+            }
+            
+            smoothPosition(key, newPosition) {
+                if (!this.lastPositions[key]) {
+                    this.lastPositions[key] = newPosition;
+                    return newPosition;
+                }
+
+                const lastPos = this.lastPositions[key];
+                const smoothed = {
+                    x: lastPos.x + (newPosition.x - lastPos.x) * this.smoothingFactor,
+                    y: lastPos.y + (newPosition.y - lastPos.y) * this.smoothingFactor
+                };
+
+                this.lastPositions[key] = smoothed;
+                return smoothed;
+            }
+
+            calculateFaceBoundingBox(landmarks) {
+                // Find min/max coordinates across all landmarks
+                let minX = Infinity, minY = Infinity;
+                let maxX = -Infinity, maxY = -Infinity;
+
+                landmarks.forEach(landmark => {
+                    if (landmark.x < minX) minX = landmark.x;
+                    if (landmark.x > maxX) maxX = landmark.x;
+                    if (landmark.y < minY) minY = landmark.y;
+                    if (landmark.y > maxY) maxY = landmark.y;
+                });
+
+                return {
+                    minX,
+                    minY,
+                    maxX,
+                    maxY,
+                    width: maxX - minX,
+                    height: maxY - minY
+                };
+            }
+
+            transformLandmarkToTargetFrame(landmark, faceBoundingBox) {
+                // Calculate scale factor to fit face into target frame while preserving aspect ratio
+                const scaleX = this.targetFrame.width / faceBoundingBox.width;
+                const scaleY = this.targetFrame.height / faceBoundingBox.height;
+
+                // Use smaller scale to preserve aspect ratio
+                const scale = Math.min(scaleX, scaleY);
+
+                // Calculate scaled dimensions
+                const scaledWidth = faceBoundingBox.width * scale;
+                const scaledHeight = faceBoundingBox.height * scale;
+
+                // Calculate offsets to center the face in the target frame
+                const offsetX = this.targetFrame.x + (this.targetFrame.width - scaledWidth) / 2;
+                const offsetY = this.targetFrame.y + (this.targetFrame.height - scaledHeight) / 2;
+
+                // Transform the landmark
+                const normalizedX = (landmark.x - faceBoundingBox.minX) / faceBoundingBox.width;
+                const normalizedY = (landmark.y - faceBoundingBox.minY) / faceBoundingBox.height;
+
+                return {
+                    x: normalizedX * scaledWidth + offsetX,
+                    y: normalizedY * scaledHeight + offsetY
+                };
+            }
+        }
+        
+        // Initialize the face tracker when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new FaceTracker();
+        });
+    </script>
+</body>
+</html>
