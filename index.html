@@ -225,6 +225,7 @@
     </div>
     
     <div class="status" id="status">Click "Start Camera" to begin face tracking</div>
+    <div class="status" id="debug-yaw" style="margin-top: 10px;">Yaw: 0</div>
 
     <!-- MediaPipe Face Mesh -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -290,7 +291,7 @@
 
                 // Scale target frame to rendered size and adjust for offset
                 this.targetFrame = {
-                    x: originalTargetFrame.x * scale - offsetX,
+                    x: originalTargetFrame.x * scale - offsetX + 8,
                     y: originalTargetFrame.y * scale - offsetY,
                     width: originalTargetFrame.width * scale,
                     height: originalTargetFrame.height * scale
@@ -600,13 +601,19 @@
                 // Calculate face bounding box once per frame
                 const faceBoundingBox = this.calculateFaceBoundingBox(landmarks);
 
+                // Calculate yaw for head position offset
+                const noseTip = landmarks[1];
+                const headRotationSensitivity = parseFloat(document.getElementById('headRotation').value);
+                const yaw = (noseTip.x - 0.5) * headRotationSensitivity * 30;
+                this.currentYaw = yaw;
+
                 const intensity = parseFloat(document.getElementById('animationIntensity').value);
                 const eyeSensitivity = parseFloat(document.getElementById('eyeSensitivity').value);
                 const mouthSensitivity = parseFloat(document.getElementById('mouthSensitivity').value);
 
                 this.animateEyes(landmarks, faceBoundingBox, intensity * eyeSensitivity);
                 this.animateMouth(landmarks, faceBoundingBox, intensity * mouthSensitivity);
-                this.animateHeadRotation(landmarks, intensity * parseFloat(document.getElementById('headRotation').value));
+                this.animateHeadRotation(landmarks, intensity * headRotationSensitivity);
             }
 
             drawDebugBoxes(faceBoundingBox) {
@@ -688,12 +695,15 @@
                 const scaledLeftX = centerX - (centerX - leftPosition.x) * eyeSpacingScale;
                 const scaledRightX = centerX + (rightPosition.x - centerX) * eyeSpacingScale;
 
+                // Apply horizontal offset based on yaw if yaw < 0
+                const yawOffset = this.currentYaw < 0 ? this.currentYaw * 10 : 0;
+
                 // Align eyes vertically by using average y position
                 const alignedY = (leftPosition.y + rightPosition.y) / 2;
 
-                this.cartoonElements.leftEye.setAttribute('x', scaledLeftX - 15);
+                this.cartoonElements.leftEye.setAttribute('x', scaledLeftX - 15 + yawOffset);
                 this.cartoonElements.leftEye.setAttribute('y', alignedY - 15);
-                this.cartoonElements.rightEye.setAttribute('x', scaledRightX - 15);
+                this.cartoonElements.rightEye.setAttribute('x', scaledRightX - 15 + yawOffset);
                 this.cartoonElements.rightEye.setAttribute('y', alignedY - 15);
             }
             
@@ -756,6 +766,12 @@
                 centerX /= transformedPoints.length;
                 centerY /= transformedPoints.length;
 
+                // Apply smoothing to mouth center position
+                const smoothedMouthCenter = this.smoothPosition('mouthCenter', { x: centerX, y: centerY });
+
+                // Apply horizontal offset based on yaw if yaw < 0
+                const yawOffset = this.currentYaw < 0 ? this.currentYaw * 10 : 0;
+
                 // Show smile image or mouth outline based on state
                 if (timer.isShowingSmile) {
                     // Hide mouth outline and show smile image centered at mouth position
@@ -767,8 +783,8 @@
                     const smileHeight = baseSmileSize * this.imageScale;
                     this.cartoonElements.smileImage.setAttribute('width', smileWidth);
                     this.cartoonElements.smileImage.setAttribute('height', smileHeight);
-                    this.cartoonElements.smileImage.setAttribute('x', centerX - smileWidth / 2);
-                    this.cartoonElements.smileImage.setAttribute('y', centerY - smileHeight / 2);
+                    this.cartoonElements.smileImage.setAttribute('x', smoothedMouthCenter.x - smileWidth / 2 + yawOffset);
+                    this.cartoonElements.smileImage.setAttribute('y', smoothedMouthCenter.y - smileHeight / 2);
                     this.cartoonElements.smileImage.style.display = 'block';
 
                     // Re-append smile image to ensure it's in the DOM
@@ -778,10 +794,10 @@
                     this.cartoonElements.smileImage.style.display = 'none';
                     this.cartoonElements.mouthLayer.innerHTML = '';
 
-                    // Second pass: scale points by 3x relative to center
+                    // Second pass: scale points by 3x relative to center and apply yaw offset
                     const mouthScale = 3.0;
                     const scaledPoints = transformedPoints.map(point => ({
-                        x: centerX + (point.x - centerX) * mouthScale,
+                        x: centerX + (point.x - centerX) * mouthScale + yawOffset,
                         y: centerY + (point.y - centerY) * mouthScale
                     }));
 
@@ -818,27 +834,26 @@
                 if (noseTip && leftEye && rightEye) {
                     // Calculate yaw (left/right head turn)
                     const yaw = (noseTip.x - 0.5) * sensitivity * 30; // -30 to +30 degrees
-                    
+
                     // Calculate pitch (up/down head tilt)
                     const pitch = (noseTip.y - 0.5) * sensitivity * 15; // -15 to +15 degrees
-                    
+
+                    // Display yaw value for debugging
+                    document.getElementById('debug-yaw').textContent = `Yaw: ${yaw.toFixed(2)} | noseTip.x: ${noseTip.x.toFixed(3)}`;
+
                     // Apply rotation to the entire cartoon
                     const cartoonSvg = document.getElementById('cartoon-svg');
                     cartoonSvg.style.transform = `rotateY(${yaw}deg) rotateX(${pitch}deg)`;
                     cartoonSvg.style.transformOrigin = 'center center';
-                    
+
                     // Flip the background PNG based on head turn
                     const backgroundImg = document.getElementById('cartoon-bg');
-                    const headRotation = parseFloat(document.getElementById('headRotation').value);
-                    
-                    if (yaw > 5) {
-                        // Turned right - flip horizontally
+
+                    if (yaw < -1) {
+                        // Turned left - flip horizontally
                         backgroundImg.style.transform = 'scaleX(-1)';
-                    } else if (yaw < -5) {
-                        // Turned left - normal orientation
-                        backgroundImg.style.transform = 'scaleX(1)';
                     } else {
-                        // Facing forward - normal orientation
+                        // Normal orientation
                         backgroundImg.style.transform = 'scaleX(1)';
                     }
                 }
