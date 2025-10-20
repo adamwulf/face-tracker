@@ -105,14 +105,22 @@
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            width: 400px;
-            height: 400px;
+            width: 1000px;
+            height: 1000px;
         }
-        
+
         .cartoon-wrapper img {
+            position: absolute;
             display: block;
-            width: 100%;
-            height: 100%;
+        }
+
+        #cartoon-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            width: 1000px;
+            height: 1000px;
         }
         
         .animation-controls {
@@ -133,9 +141,47 @@
             font-size: 14px;
             min-width: 80px;
         }
-        
+
         input[type="range"] {
             width: 100px;
+        }
+
+        .face-buttons {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            max-width: 600px;
+        }
+
+        .face-button {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border: 2px solid #333;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #222;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .face-button:hover {
+            border-color: #4CAF50;
+            transform: scale(1.1);
+        }
+
+        .face-button.active {
+            border-color: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+
+        .face-button img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
         }
     </style>
 </head>
@@ -149,9 +195,9 @@
     
     <div class="cartoon-container">
         <h2>🎭 Animated Cartoon Face</h2>
-        <div class="cartoon-wrapper">
-            <img id="cartoon-bg" src="facecam-blank.png" alt="Cartoon Face Background" style="width: 400px; height: 400px; object-fit: cover;">
-            <svg id="cartoon-svg" width="400" height="400" viewBox="0 0 400 400" style="position: absolute; top: 0; left: 0; pointer-events: none;">
+        <div class="cartoon-wrapper" id="cartoon-wrapper">
+            <img id="cartoon-bg" src="facecam-blank.png" alt="Cartoon Face Background">
+            <svg id="cartoon-svg" width="1000" height="1000" viewBox="0 0 1000 1000">
                 <!-- Debug Layer - Bounding boxes -->
                 <g id="debug-layer">
                     <!-- Will show target frame and original bounding box -->
@@ -169,6 +215,11 @@
                     <image id="smile-image" href="default-smile.png" x="0" y="0" width="80" height="80" style="display: none;"/>
                 </g>
             </svg>
+        </div>
+
+        <!-- Face selection buttons -->
+        <div class="face-buttons" id="face-buttons">
+            <!-- Face buttons will be populated here -->
         </div>
     </div>
     
@@ -227,6 +278,31 @@
     <div class="status" id="status">Click "Start Camera" to begin face tracking</div>
     <div class="status" id="debug-yaw" style="margin-top: 10px;">Yaw: 0</div>
 
+    <!-- Preload face images (hidden) -->
+    <div id="face-preload" style="display: none;">
+        <img id="face-blank" src="facecam-blank.png" alt="Blank Face">
+        <img id="face-1" src="faces/facecam-1.png" alt="Face 1">
+        <img id="face-2" src="faces/facecam-2.png" alt="Face 2">
+        <img id="face-3" src="faces/facecam-3.png" alt="Face 3">
+        <img id="face-4" src="faces/facecam-4.png" alt="Face 4">
+        <img id="face-5" src="faces/facecam-5.png" alt="Face 5">
+        <img id="face-6" src="faces/facecam-6.png" alt="Face 6">
+        <img id="face-7" src="faces/facecam-7.png" alt="Face 7">
+        <img id="face-8" src="faces/facecam-8.png" alt="Face 8">
+        <img id="face-9" src="faces/facecam-9.png" alt="Face 9">
+        <img id="face-10" src="faces/facecam-10.png" alt="Face 10">
+        <img id="face-11" src="faces/facecam-11.png" alt="Face 11">
+        <img id="face-12" src="faces/facecam-12.png" alt="Face 12">
+        <img id="face-13" src="faces/facecam-13.png" alt="Face 13">
+        <img id="face-14" src="faces/facecam-14.png" alt="Face 14">
+        <img id="face-15" src="faces/facecam-15.png" alt="Face 15">
+        <img id="face-16" src="faces/facecam-16.png" alt="Face 16">
+        <img id="face-17" src="faces/facecam-17.png" alt="Face 17">
+        <img id="face-18" src="faces/facecam-18.png" alt="Face 18">
+        <img id="face-19" src="faces/facecam-19.png" alt="Face 19">
+        <img id="face-20" src="faces/facecam-20.png" alt="Face 20">
+    </div>
+
     <!-- MediaPipe Face Mesh -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
@@ -241,14 +317,19 @@
                 this.ctx = this.canvas.getContext('2d');
                 this.faceMesh = null;
                 this.isRunning = false;
-                
+
+                // Face configuration
+                this.faceConfigs = [];
+                this.currentFaceIndex = 0;
+
                 // Cartoon animation properties
                 this.cartoonElements = {
                     leftEye: document.getElementById('left-eye'),
                     rightEye: document.getElementById('right-eye'),
                     mouthLayer: document.getElementById('mouth-layer'),
                     debugLayer: document.getElementById('debug-layer'),
-                    smileImage: document.getElementById('smile-image')
+                    smileImage: document.getElementById('smile-image'),
+                    background: document.getElementById('cartoon-bg')
                 };
 
                 // Animation smoothing
@@ -310,20 +391,259 @@
                 this.blinkDuration = 150; // milliseconds
                 this.minBlinkInterval = 2000; // minimum 2 seconds between blinks
                 this.maxBlinkInterval = 5000; // maximum 5 seconds between blinks
-                
+
+                // Initialize faces analysis
+                this.initializeFaces();
+
                 this.setupEventListeners();
                 this.setupMediaPipe();
+            }
+
+            async initializeFaces() {
+                console.log('Analyzing all face images...');
+                document.getElementById('status').textContent = 'Analyzing face images...';
+
+                // Wait a moment for images to attempt loading
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Check which preloaded images successfully loaded and analyze them
+                const blankImg = document.getElementById('face-blank');
+                if (blankImg.complete && blankImg.naturalWidth > 0) {
+                    this.analyzeImageElement(blankImg, 'facecam-blank.png', 'blank', 'Blank Face');
+                }
+
+                // Check numbered faces
+                for (let i = 1; i <= 20; i++) {
+                    const img = document.getElementById(`face-${i}`);
+                    if (img && img.complete && img.naturalWidth > 0) {
+                        this.analyzeImageElement(img, `faces/facecam-${i}.png`, `face-${i}`, `Face ${i}`);
+                    }
+                }
+
+                // Calculate alignment offsets relative to first face (reference)
+                if (this.faceConfigs.length > 0) {
+                    const reference = this.faceConfigs[0];
+                    console.log(`\nAligning all faces to reference: ${reference.name}`);
+                    console.log(`Reference body bottom: ${reference.bodyBottom}`);
+
+                    for (const face of this.faceConfigs) {
+                        // Calculate alignment offset (vertical shift to align bottom)
+                        // Positive offset = shift UP, Negative offset = shift DOWN
+                        face.alignmentOffset = face.bodyBottom - reference.bodyBottom;
+                        console.log(`${face.name}: bodyBottom=${face.bodyBottom}, offset = ${face.alignmentOffset}px`);
+                    }
+                }
+
+                console.log(`Face analysis complete! Found ${this.faceConfigs.length} faces.`);
+                document.getElementById('status').textContent = `Face analysis complete! Found ${this.faceConfigs.length} faces. Click "Start Camera" to begin`;
+
+                // Populate face buttons
+                this.populateFaceButtons();
+
+                // Load the first face
+                if (this.faceConfigs.length > 0) {
+                    this.changeFace(0);
+                }
+            }
+
+            populateFaceButtons() {
+                const container = document.getElementById('face-buttons');
+                container.innerHTML = '';
+
+                this.faceConfigs.forEach((face, index) => {
+                    const button = document.createElement('button');
+                    button.className = 'face-button';
+                    button.dataset.faceIndex = index;
+                    button.title = face.name;
+
+                    const img = document.createElement('img');
+                    img.src = face.image;
+                    img.alt = face.name;
+
+                    button.appendChild(img);
+                    button.addEventListener('click', () => this.changeFace(index));
+
+                    container.appendChild(button);
+                });
+            }
+
+            changeFace(index) {
+                if (index < 0 || index >= this.faceConfigs.length) {
+                    console.error('Invalid face index:', index);
+                    return;
+                }
+
+                this.currentFaceIndex = index;
+                const face = this.faceConfigs[index];
+
+                console.log(`Changing to ${face.name}`);
+
+                // Get reference face (first face) for alignment
+                const reference = this.faceConfigs[0];
+
+                // Fixed reference point in 1000x1000 canvas (bottom of reference image)
+                const REFERENCE_BOTTOM = 800; // Position reference face's bottom at Y=800
+
+                // Calculate position for this face
+                // All faces align their bodyBottom to the reference's bodyBottom
+                const referenceBottomY = REFERENCE_BOTTOM - (reference.height - reference.bodyBottom);
+                const faceBottomY = referenceBottomY - (face.bodyBottom - reference.bodyBottom);
+                const faceTop = faceBottomY - face.height;
+
+                // Center horizontally in the 1000px canvas
+                const faceLeft = (1000 - face.width) / 2;
+
+                // Update the background image and position
+                this.cartoonElements.background.src = face.image;
+                this.cartoonElements.background.style.width = `${face.width}px`;
+                this.cartoonElements.background.style.height = `${face.height}px`;
+                this.cartoonElements.background.style.left = `${faceLeft}px`;
+                this.cartoonElements.background.style.top = `${faceTop}px`;
+                this.cartoonElements.background.style.transform = 'scaleX(1)';
+
+                console.log(`Positioning: left=${faceLeft}, top=${faceTop}, size=${face.width}x${face.height}`);
+
+                // Update active button styling
+                document.querySelectorAll('.face-button').forEach((btn, i) => {
+                    if (i === index) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+
+                // Store face position for animation calculations
+                this.faceLeft = faceLeft;
+                this.faceTop = faceTop;
+
+                // Recalculate target frame based on this face's dimensions
+                this.updateTargetFrame(face);
+            }
+
+            updateTargetFrame(face) {
+                // Target frame in absolute 1000x1000 canvas coordinates
+                // Images are at natural size, so no scaling needed
+                this.targetFrame = {
+                    x: this.faceLeft + face.targetFrame.x,
+                    y: this.faceTop + face.targetFrame.y,
+                    width: face.targetFrame.width,
+                    height: face.targetFrame.height
+                };
+
+                // Store scale factor for smile image (1.0 since no scaling)
+                this.imageScale = 1.0;
+
+                console.log('Updated target frame:', this.targetFrame);
+            }
+
+            analyzeImageElement(img, imagePath, faceId, faceName) {
+                const width = img.naturalWidth;
+                const height = img.naturalHeight;
+
+                // Create temporary canvas to analyze pixels
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = width;
+                tempCanvas.height = height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(img, 0, 0);
+
+                const imageData = tempCtx.getImageData(0, 0, width, height);
+                const anchors = this.findBottomDarkPixels(imageData, width, height);
+
+                this.faceConfigs.push({
+                    id: faceId,
+                    name: faceName,
+                    image: imagePath,
+                    width: width,
+                    height: height,
+                    bodyBottom: anchors.bodyBottom,
+                    leftAnchor: [anchors.leftX, anchors.leftY],
+                    rightAnchor: [anchors.rightX, anchors.rightY],
+                    targetFrame: {
+                        x: 110,
+                        y: 80,
+                        width: 110,
+                        height: 105
+                    }
+                });
+
+                console.log(`Analyzed ${faceId}:`, {
+                    size: `${width}x${height}`,
+                    bodyBottom: anchors.bodyBottom,
+                    leftAnchor: [anchors.leftX, anchors.leftY],
+                    rightAnchor: [anchors.rightX, anchors.rightY]
+                });
+            }
+
+            findBottomDarkPixels(imageData, width, height, darknessThreshold = 100) {
+                const data = imageData.data;
+
+                let leftX = null, leftY = null;
+                let rightX = null, rightY = null;
+                let bodyBottom = null;
+
+                // Search from bottom up
+                for (let y = height - 1; y >= 0; y--) {
+                    // Check left third for dark pixels
+                    if (leftY === null) {
+                        for (let x = 0; x < width / 3; x++) {
+                            const idx = (y * width + x) * 4;
+                            const r = data[idx];
+                            const g = data[idx + 1];
+                            const b = data[idx + 2];
+                            const brightness = (r + g + b) / 3;
+
+                            if (brightness < darknessThreshold) {
+                                leftX = x;
+                                leftY = y;
+                                if (bodyBottom === null) bodyBottom = y;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Check right third for dark pixels
+                    if (rightY === null) {
+                        for (let x = width - 1; x >= (2 * width) / 3; x--) {
+                            const idx = (y * width + x) * 4;
+                            const r = data[idx];
+                            const g = data[idx + 1];
+                            const b = data[idx + 2];
+                            const brightness = (r + g + b) / 3;
+
+                            if (brightness < darknessThreshold) {
+                                rightX = x;
+                                rightY = y;
+                                if (bodyBottom === null) bodyBottom = y;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Stop once we've found both
+                    if (leftY !== null && rightY !== null) {
+                        break;
+                    }
+                }
+
+                return {
+                    leftX: leftX ?? 0,
+                    leftY: leftY ?? height - 1,
+                    rightX: rightX ?? width - 1,
+                    rightY: rightY ?? height - 1,
+                    bodyBottom: bodyBottom ?? height - 1
+                };
             }
             
             setupEventListeners() {
                 document.getElementById('startBtn').addEventListener('click', () => this.start());
                 document.getElementById('stopBtn').addEventListener('click', () => this.stop());
-                
+
                 // Feature toggles
                 ['showEyes', 'showMouth', 'showNose', 'showEars'].forEach(id => {
                     document.getElementById(id).addEventListener('change', () => this.updateSettings());
                 });
-                
+
                 // Animation controls
                 document.getElementById('animationIntensity').addEventListener('input', (e) => {
                     document.getElementById('intensityValue').textContent = e.target.value;
@@ -830,7 +1150,7 @@
                 const noseTip = landmarks[1];
                 const leftEye = landmarks[33];
                 const rightEye = landmarks[362];
-                
+
                 if (noseTip && leftEye && rightEye) {
                     // Calculate yaw (left/right head turn)
                     const yaw = (noseTip.x - 0.5) * sensitivity * 30; // -30 to +30 degrees
@@ -938,7 +1258,7 @@
                 const offsetX = this.targetFrame.x + (this.targetFrame.width - scaledWidth) / 2;
                 const offsetY = this.targetFrame.y + (this.targetFrame.height - scaledHeight) / 2;
 
-                // Transform the landmark
+                // Transform the landmark from normalized coordinates to canvas coordinates
                 const normalizedX = (landmark.x - faceBoundingBox.minX) / faceBoundingBox.width;
                 const normalizedY = (landmark.y - faceBoundingBox.minY) / faceBoundingBox.height;
 

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Image Analyzer</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        .canvas-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        canvas {
+            border: 1px solid #333;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            background: #222;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .face-info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Face Image Analyzer</h1>
+    <p>This tool will analyze all face images, detect alignment pixels, and generate configuration.</p>
+
+    <button onclick="analyzeFaces()">Analyze All Faces</button>
+
+    <div class="canvas-container" id="canvasContainer"></div>
+
+    <div id="output"></div>
+
+    <script>
+        const faceImages = [
+            'facecam-blank.png',
+            'faces/facecam-1.png',
+            'faces/facecam-2.png',
+            'faces/facecam-3.png',
+            'faces/facecam-4.png',
+            'faces/facecam-5.png',
+            'faces/facecam-6.png',
+            'faces/facecam-7.png',
+            'faces/facecam-8.png',
+            'faces/facecam-9.png',
+            'faces/facecam-10.png'
+        ];
+
+        function findBottomDarkPixels(imageData, width, height, darknessThreshold = 100) {
+            const data = imageData.data;
+
+            let leftX = null, leftY = null;
+            let rightX = null, rightY = null;
+            let bodyBottom = null;
+
+            // Search from bottom up
+            for (let y = height - 1; y >= 0; y--) {
+                // Check left third for dark pixels
+                if (leftY === null) {
+                    for (let x = 0; x < width / 3; x++) {
+                        const idx = (y * width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        const brightness = (r + g + b) / 3;
+
+                        if (brightness < darknessThreshold) {
+                            leftX = x;
+                            leftY = y;
+                            if (bodyBottom === null) bodyBottom = y;
+                            break;
+                        }
+                    }
+                }
+
+                // Check right third for dark pixels
+                if (rightY === null) {
+                    for (let x = width - 1; x >= (2 * width) / 3; x--) {
+                        const idx = (y * width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        const brightness = (r + g + b) / 3;
+
+                        if (brightness < darknessThreshold) {
+                            rightX = x;
+                            rightY = y;
+                            if (bodyBottom === null) bodyBottom = y;
+                            break;
+                        }
+                    }
+                }
+
+                // Stop once we've found both
+                if (leftY !== null && rightY !== null) {
+                    break;
+                }
+            }
+
+            return {
+                leftX: leftX ?? 0,
+                leftY: leftY ?? height - 1,
+                rightX: rightX ?? width - 1,
+                rightY: rightY ?? height - 1,
+                bodyBottom: bodyBottom ?? height - 1
+            };
+        }
+
+        async function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        async function analyzeFaces() {
+            const output = document.getElementById('output');
+            const canvasContainer = document.getElementById('canvasContainer');
+
+            output.textContent = 'Loading images...\n';
+            canvasContainer.innerHTML = '';
+
+            const faceConfigs = [];
+
+            // Load and analyze all images
+            for (let i = 0; i < faceImages.length; i++) {
+                const imagePath = faceImages[i];
+
+                try {
+                    output.textContent += `\nLoading ${imagePath}...\n`;
+
+                    const img = await loadImage(imagePath);
+                    const width = img.width;
+                    const height = img.height;
+
+                    // Create canvas to read pixel data
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, width, height);
+                    const anchors = findBottomDarkPixels(imageData, width, height);
+
+                    // Draw anchor points on canvas for visualization
+                    ctx.strokeStyle = 'red';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(anchors.leftX, anchors.leftY, 5, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(anchors.rightX, anchors.rightY, 5, 0, 2 * Math.PI);
+                    ctx.stroke();
+
+                    // Draw bottom line
+                    ctx.strokeStyle = 'blue';
+                    ctx.beginPath();
+                    ctx.moveTo(0, anchors.bodyBottom);
+                    ctx.lineTo(width, anchors.bodyBottom);
+                    ctx.stroke();
+
+                    // Add to page for visualization
+                    const container = document.createElement('div');
+                    container.innerHTML = `<div style="margin: 10px;"><strong>${imagePath}</strong><br>${width}x${height}</div>`;
+                    container.appendChild(canvas);
+                    canvasContainer.appendChild(container);
+
+                    const faceId = imagePath.includes('blank') ? 'blank' :
+                                   `face-${imagePath.match(/facecam-(\d+)/)?.[1] || i}`;
+
+                    faceConfigs.push({
+                        id: faceId,
+                        name: faceId === 'blank' ? 'Blank Face' : `Face ${faceId.replace('face-', '')}`,
+                        image: imagePath,
+                        width: width,
+                        height: height,
+                        bodyBottom: anchors.bodyBottom,
+                        leftAnchor: [anchors.leftX, anchors.leftY],
+                        rightAnchor: [anchors.rightX, anchors.rightY],
+                        targetFrame: {
+                            x: 110,
+                            y: 80,
+                            width: 110,
+                            height: 105
+                        }
+                    });
+
+                    output.textContent += `  Size: ${width}x${height}\n`;
+                    output.textContent += `  Body bottom: ${anchors.bodyBottom}\n`;
+                    output.textContent += `  Left anchor: (${anchors.leftX}, ${anchors.leftY})\n`;
+                    output.textContent += `  Right anchor: (${anchors.rightX}, ${anchors.rightY})\n`;
+
+                } catch (error) {
+                    output.textContent += `  Error loading ${imagePath}: ${error.message}\n`;
+                }
+            }
+
+            // Align all faces to the first face (reference)
+            if (faceConfigs.length > 0) {
+                const reference = faceConfigs[0];
+                output.textContent += `\n\nAligning all faces to reference: ${reference.name}\n`;
+                output.textContent += `Reference body bottom: ${reference.bodyBottom}\n\n`;
+
+                for (const face of faceConfigs) {
+                    // Calculate alignment offset (vertical shift to align bottom)
+                    face.alignmentOffset = reference.bodyBottom - face.bodyBottom;
+
+                    output.textContent += `${face.name}: offset = ${face.alignmentOffset}px\n`;
+                }
+
+                // Generate JSON config
+                const config = {
+                    faces: faceConfigs
+                };
+
+                output.textContent += '\n\n=== Generated Configuration (faces-config.json) ===\n\n';
+                output.textContent += JSON.stringify(config, null, 2);
+
+                // Offer download
+                const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = 'faces-config.json';
+                downloadLink.textContent = 'Download faces-config.json';
+                downloadLink.style.cssText = 'display: block; margin: 20px 0; padding: 10px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; text-align: center;';
+
+                const linkContainer = document.createElement('div');
+                linkContainer.appendChild(downloadLink);
+                output.insertBefore(linkContainer, output.firstChild);
+            }
+        }
+    </script>
+</body>
+</html>

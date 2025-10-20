@@ -1,0 +1,147 @@
+{
+  "faces": [
+    {
+      "id": "blank",
+      "name": "Blank Face",
+      "image": "facecam-blank.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-1",
+      "name": "Face 1",
+      "image": "faces/facecam-1.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-2",
+      "name": "Face 2",
+      "image": "faces/facecam-2.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-3",
+      "name": "Face 3",
+      "image": "faces/facecam-3.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-4",
+      "name": "Face 4",
+      "image": "faces/facecam-4.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-5",
+      "name": "Face 5",
+      "image": "faces/facecam-5.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-6",
+      "name": "Face 6",
+      "image": "faces/facecam-6.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-7",
+      "name": "Face 7",
+      "image": "faces/facecam-7.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-8",
+      "name": "Face 8",
+      "image": "faces/facecam-8.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-9",
+      "name": "Face 9",
+      "image": "faces/facecam-9.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    },
+    {
+      "id": "face-10",
+      "name": "Face 10",
+      "image": "faces/facecam-10.png",
+      "width": 310,
+      "height": 258,
+      "targetFrame": {
+        "x": 110,
+        "y": 80,
+        "width": 110,
+        "height": 105
+      }
+    }
+  ]
+}
