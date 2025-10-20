@@ -112,6 +112,7 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             width: 800px;
             height: 500px;
+            background: rgb(0, 255, 0);
         }
 
         .cartoon-wrapper img {
@@ -1536,7 +1537,9 @@
         
         // Initialize the face tracker when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new FaceTracker();
+            const tracker = new FaceTracker();
+            // Auto-start the camera
+            setTimeout(() => tracker.start(), 500);
         });
     </script>
 </body>
