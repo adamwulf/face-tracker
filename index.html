@@ -481,27 +481,40 @@
                 // Get reference face (first face) for alignment
                 const reference = this.faceConfigs[0];
 
-                // Fixed reference point in 1000x1000 canvas (bottom of reference image)
-                const REFERENCE_BOTTOM = 800; // Position reference face's bottom at Y=800
+                // Calculate scale factor based on anchor point distances
+                const referenceAnchorWidth = reference.rightAnchor[0] - reference.leftAnchor[0];
+                const faceAnchorWidth = face.rightAnchor[0] - face.leftAnchor[0];
+                const scale = referenceAnchorWidth / faceAnchorWidth;
 
-                // Calculate position for this face
-                // All faces align their bodyBottom to the reference's bodyBottom
-                const referenceBottomY = REFERENCE_BOTTOM - (reference.height - reference.bodyBottom);
-                const faceBottomY = referenceBottomY - (face.bodyBottom - reference.bodyBottom);
-                const faceTop = faceBottomY - face.height;
+                // Calculate scaled dimensions
+                const scaledWidth = face.width * scale;
+                const scaledHeight = face.height * scale;
+                const scaledBodyBottom = face.bodyBottom * scale;
+                const scaledLeftAnchorX = face.leftAnchor[0] * scale;
 
-                // Center horizontally in the 1000px canvas
-                const faceLeft = (1000 - face.width) / 2;
+                // Calculate where the bodyBottom line should be in canvas coordinates
+                const REFERENCE_BOTTOM = 800;
+                const targetBodyBottomY = REFERENCE_BOTTOM - (reference.height - reference.bodyBottom);
+
+                // Position this face so its bodyBottom aligns with targetBodyBottomY
+                const faceTop = targetBodyBottomY - scaledBodyBottom;
+
+                // Calculate reference position for horizontal alignment
+                const referenceLeft = (1000 - reference.width) / 2;
+                const targetLeftAnchorX = referenceLeft + reference.leftAnchor[0];
+
+                // Position horizontally so left anchor aligns
+                const faceLeft = targetLeftAnchorX - scaledLeftAnchorX;
 
                 // Update the background image and position
                 this.cartoonElements.background.src = face.image;
-                this.cartoonElements.background.style.width = `${face.width}px`;
-                this.cartoonElements.background.style.height = `${face.height}px`;
+                this.cartoonElements.background.style.width = `${scaledWidth}px`;
+                this.cartoonElements.background.style.height = `${scaledHeight}px`;
                 this.cartoonElements.background.style.left = `${faceLeft}px`;
                 this.cartoonElements.background.style.top = `${faceTop}px`;
                 this.cartoonElements.background.style.transform = 'scaleX(1)';
 
-                console.log(`Positioning: left=${faceLeft}, top=${faceTop}, size=${face.width}x${face.height}`);
+                console.log(`Positioning: left=${faceLeft}, top=${faceTop}, size=${scaledWidth}x${scaledHeight}, scale=${scale.toFixed(3)}`);
 
                 // Update active button styling
                 document.querySelectorAll('.face-button').forEach((btn, i) => {
@@ -512,38 +525,41 @@
                     }
                 });
 
-                // Store face position for animation calculations
+                // Store face position and scale for animation calculations
                 this.faceLeft = faceLeft;
                 this.faceTop = faceTop;
+                this.faceScale = scale;
+                this.scaledWidth = scaledWidth;
+                this.scaledHeight = scaledHeight;
 
                 // Draw debug visualization
-                this.drawAlignmentDebug(face, reference, faceLeft, faceTop);
+                this.drawAlignmentDebug(face, reference, faceLeft, faceTop, scale, scaledWidth, scaledHeight);
 
                 // Recalculate target frame based on this face's dimensions
                 this.updateTargetFrame(face);
             }
 
-            drawAlignmentDebug(face, reference, faceLeft, faceTop) {
+            drawAlignmentDebug(face, reference, faceLeft, faceTop, scale, scaledWidth, scaledHeight) {
                 // Clear previous debug visualization
                 this.cartoonElements.debugLayer.innerHTML = '';
 
-                // Draw bounding box for the current face image
+                // Draw bounding box for the current face image (scaled)
                 const imageBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                 imageBox.setAttribute('x', faceLeft);
                 imageBox.setAttribute('y', faceTop);
-                imageBox.setAttribute('width', face.width);
-                imageBox.setAttribute('height', face.height);
+                imageBox.setAttribute('width', scaledWidth);
+                imageBox.setAttribute('height', scaledHeight);
                 imageBox.setAttribute('fill', 'none');
                 imageBox.setAttribute('stroke', 'yellow');
                 imageBox.setAttribute('stroke-width', '2');
                 imageBox.setAttribute('stroke-dasharray', '5,5');
                 this.cartoonElements.debugLayer.appendChild(imageBox);
 
-                // Draw RED dots for current face's anchor points
-                const leftAnchorX = faceLeft + face.leftAnchor[0];
-                const leftAnchorY = faceTop + face.leftAnchor[1];
-                const rightAnchorX = faceLeft + face.rightAnchor[0];
-                const rightAnchorY = faceTop + face.rightAnchor[1];
+                // Draw RED dots for current face's anchor points (scaled)
+                const leftAnchorX = faceLeft + face.leftAnchor[0] * scale;
+                const leftAnchorY = faceTop + face.leftAnchor[1] * scale;
+                const rightAnchorX = faceLeft + face.rightAnchor[0] * scale;
+                const rightAnchorY = faceTop + face.rightAnchor[1] * scale;
 
                 const leftDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 leftDot.setAttribute('cx', leftAnchorX);
@@ -599,16 +615,16 @@
 
             updateTargetFrame(face) {
                 // Target frame in absolute 1000x1000 canvas coordinates
-                // Images are at natural size, so no scaling needed
+                // Scale the target frame with the face
                 this.targetFrame = {
-                    x: this.faceLeft + face.targetFrame.x,
-                    y: this.faceTop + face.targetFrame.y,
-                    width: face.targetFrame.width,
-                    height: face.targetFrame.height
+                    x: this.faceLeft + face.targetFrame.x * this.faceScale,
+                    y: this.faceTop + face.targetFrame.y * this.faceScale,
+                    width: face.targetFrame.width * this.faceScale,
+                    height: face.targetFrame.height * this.faceScale
                 };
 
-                // Store scale factor for smile image (1.0 since no scaling)
-                this.imageScale = 1.0;
+                // Store scale factor for smile image
+                this.imageScale = this.faceScale;
 
                 console.log('Updated target frame:', this.targetFrame);
             }
@@ -1244,6 +1260,7 @@
                     cartoonSvg.style.transformOrigin = 'center center';
 
                     // Flip the background PNG based on head turn
+                    // Note: We don't use transform for flipping because we're using width/height CSS for scaling
                     const backgroundImg = document.getElementById('cartoon-bg');
 
                     if (yaw < -1) {
