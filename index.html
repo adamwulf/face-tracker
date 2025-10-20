@@ -485,7 +485,7 @@
                 console.log(mouthIndices.length);
                 mouthIndices.splice(1, 10);
                 console.log(mouthIndices.length);
-                this.ctx.strokeStyle = '#4ecdc4';
+                this.ctx.strokeStyle = '#333';
                 this.ctx.lineWidth = 3;
                 
                 this.ctx.beginPath();
@@ -690,21 +690,40 @@
                 // Clear previous mouth path
                 this.cartoonElements.mouthLayer.innerHTML = '';
 
-                // Create mouth path using transformed landmarks
+                // First pass: transform all landmarks and calculate center
+                const transformedPoints = [];
+                let centerX = 0, centerY = 0;
+
+                mouthIndices.forEach((index) => {
+                    const landmark = landmarks[index];
+                    const transformed = this.transformLandmarkToTargetFrame(landmark, faceBoundingBox);
+                    transformedPoints.push(transformed);
+                    centerX += transformed.x;
+                    centerY += transformed.y;
+                });
+
+                centerX /= transformedPoints.length;
+                centerY /= transformedPoints.length;
+
+                // Second pass: scale points by 2x relative to center
+                const mouthScale = 2.0;
+                const scaledPoints = transformedPoints.map(point => ({
+                    x: centerX + (point.x - centerX) * mouthScale,
+                    y: centerY + (point.y - centerY) * mouthScale
+                }));
+
+                // Create mouth path using scaled landmarks
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('stroke', '#4ecdc4');
+                path.setAttribute('stroke', '#333');
                 path.setAttribute('stroke-width', '3');
                 path.setAttribute('fill', 'none');
 
                 let pathData = '';
-                mouthIndices.forEach((index, i) => {
-                    const landmark = landmarks[index];
-                    // Transform landmark to target frame
-                    const transformed = this.transformLandmarkToTargetFrame(landmark, faceBoundingBox);
+                scaledPoints.forEach((point, i) => {
                     if (i === 0) {
-                        pathData += `M${transformed.x} ${transformed.y}`;
+                        pathData += `M${point.x} ${point.y}`;
                     } else {
-                        pathData += ` L${transformed.x} ${transformed.y}`;
+                        pathData += ` L${point.x} ${point.y}`;
                     }
                 });
                 pathData += ' Z'; // Close the path
