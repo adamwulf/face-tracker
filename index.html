@@ -15,12 +15,18 @@
             flex-direction: column;
             align-items: center;
         }
-        
+
         h1 {
             margin-bottom: 20px;
             text-align: center;
         }
-        
+
+        .main-display {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
         .container {
             position: relative;
             border: 2px solid #333;
@@ -31,10 +37,10 @@
         
         #video {
             display: block;
-            width: 640px;
-            height: 480px;
+            width: 80px;
+            height: 60px;
         }
-        
+
         #canvas {
             position: absolute;
             top: 0;
@@ -94,7 +100,6 @@
         }
         
         .cartoon-container {
-            margin-top: 30px;
             text-align: center;
         }
         
@@ -105,8 +110,8 @@
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            width: 1000px;
-            height: 1000px;
+            width: 800px;
+            height: 500px;
         }
 
         .cartoon-wrapper img {
@@ -119,8 +124,8 @@
             top: 0;
             left: 0;
             pointer-events: none;
-            width: 1000px;
-            height: 1000px;
+            width: 800px;
+            height: 500px;
         }
         
         .animation-controls {
@@ -187,17 +192,17 @@
 </head>
 <body>
     <h1>🎭 Face Tracker</h1>
-    
-    <div class="container">
-        <video id="video" autoplay muted playsinline></video>
-        <canvas id="canvas"></canvas>
-    </div>
-    
-    <div class="cartoon-container">
-        <h2>🎭 Animated Cartoon Face</h2>
-        <div class="cartoon-wrapper" id="cartoon-wrapper">
+
+    <div class="main-display">
+        <div class="container">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="cartoon-container">
+            <div class="cartoon-wrapper" id="cartoon-wrapper">
             <img id="cartoon-bg" src="facecam-blank.png" alt="Cartoon Face Background">
-            <svg id="cartoon-svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+            <svg id="cartoon-svg" width="800" height="500" viewBox="0 0 800 500">
                 <!-- Debug Layer - Bounding boxes -->
                 <g id="debug-layer">
                     <!-- Will show target frame and original bounding box -->
@@ -221,13 +226,15 @@
         <div class="face-buttons" id="face-buttons">
             <!-- Face buttons will be populated here -->
         </div>
+        </div>
     </div>
-    
+
     <div class="controls">
         <button id="startBtn">Start Camera</button>
         <button id="stopBtn" disabled>Stop Camera</button>
+        <button id="toggleDebug">Toggle Debug</button>
     </div>
-    
+
     <div class="feature-toggle">
         <label>
             <input type="checkbox" id="showEyes" checked>
@@ -321,6 +328,12 @@
                 // Face configuration
                 this.faceConfigs = [];
                 this.currentFaceIndex = 0;
+
+                // Track last 5 random faces for variety
+                this.recentRandomFaces = [];
+
+                // Debug mode
+                this.showDebug = false;
 
                 // Cartoon animation properties
                 this.cartoonElements = {
@@ -440,9 +453,11 @@
                 // Populate face buttons
                 this.populateFaceButtons();
 
-                // Load the first face
-                if (this.faceConfigs.length > 0) {
-                    this.changeFace(0);
+                // Load the first non-blank face
+                const firstFaceIndex = this.faceConfigs.findIndex(face => face.id !== 'blank');
+                if (firstFaceIndex !== -1) {
+                    this.changeFace(firstFaceIndex);
+                    console.log(`Auto-selected first face: ${this.faceConfigs[firstFaceIndex].name}`);
                 }
             }
 
@@ -451,6 +466,9 @@
                 container.innerHTML = '';
 
                 this.faceConfigs.forEach((face, index) => {
+                    // Skip the blank face - it's only used as a reference for alignment
+                    if (face.id === 'blank') return;
+
                     const button = document.createElement('button');
                     button.className = 'face-button';
                     button.dataset.faceIndex = index;
@@ -465,6 +483,20 @@
 
                     container.appendChild(button);
                 });
+
+                // Add random face button at the end
+                const randomButton = document.createElement('button');
+                randomButton.className = 'face-button';
+                randomButton.id = 'randomFace';
+                randomButton.title = 'Random Face';
+                randomButton.style.fontSize = '24px';
+                randomButton.style.display = 'flex';
+                randomButton.style.alignItems = 'center';
+                randomButton.style.justifyContent = 'center';
+                randomButton.textContent = '🔄';
+                randomButton.addEventListener('click', () => this.randomizeFace());
+
+                container.appendChild(randomButton);
             }
 
             changeFace(index) {
@@ -493,14 +525,17 @@
                 const scaledLeftAnchorX = face.leftAnchor[0] * scale;
 
                 // Calculate where the bodyBottom line should be in canvas coordinates
-                const REFERENCE_BOTTOM = 800;
-                const targetBodyBottomY = REFERENCE_BOTTOM - (reference.height - reference.bodyBottom);
+                const CANVAS_WIDTH = 800;
+                const CANVAS_HEIGHT = 500;
+                // Position reference face flush with bottom - the bodyBottom line accounts for
+                // pixels below it, so we position it at CANVAS_HEIGHT
+                const targetBodyBottomY = CANVAS_HEIGHT - (reference.height - reference.bodyBottom);
 
                 // Position this face so its bodyBottom aligns with targetBodyBottomY
                 const faceTop = targetBodyBottomY - scaledBodyBottom;
 
                 // Calculate reference position for horizontal alignment
-                const referenceLeft = (1000 - reference.width) / 2;
+                const referenceLeft = (CANVAS_WIDTH - reference.width) / 2;
                 const targetLeftAnchorX = referenceLeft + reference.leftAnchor[0];
 
                 // Position horizontally so left anchor aligns
@@ -539,9 +574,66 @@
                 this.updateTargetFrame(face);
             }
 
+            toggleDebug() {
+                this.showDebug = !this.showDebug;
+                if (this.showDebug) {
+                    // Redraw debug for current face
+                    if (this.faceConfigs.length > 0) {
+                        const face = this.faceConfigs[this.currentFaceIndex];
+                        const reference = this.faceConfigs[0];
+                        this.drawAlignmentDebug(face, reference, this.faceLeft, this.faceTop, this.faceScale, this.scaledWidth, this.scaledHeight);
+                    }
+                } else {
+                    // Clear debug layer
+                    this.cartoonElements.debugLayer.innerHTML = '';
+                }
+            }
+
+            randomizeFace() {
+                // Get all non-blank face indices
+                const nonBlankIndices = this.faceConfigs
+                    .map((face, index) => ({ face, index }))
+                    .filter(item => item.face.id !== 'blank')
+                    .map(item => item.index);
+
+                if (nonBlankIndices.length <= 1) {
+                    console.log('Not enough faces to randomize');
+                    return;
+                }
+
+                // Filter out the current face and recent faces (if we have more than 5 faces)
+                let availableIndices = nonBlankIndices.filter(index => index !== this.currentFaceIndex);
+
+                if (nonBlankIndices.length > 5) {
+                    // Only exclude recent faces if we have more than 5 total faces
+                    availableIndices = availableIndices.filter(index => !this.recentRandomFaces.includes(index));
+                }
+
+                // If we've filtered out everything, reset and use all faces except current
+                if (availableIndices.length === 0) {
+                    availableIndices = nonBlankIndices.filter(index => index !== this.currentFaceIndex);
+                }
+
+                // Pick a random face from the available ones
+                const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+
+                // Update recent faces list (keep last 5)
+                this.recentRandomFaces.push(randomIndex);
+                if (this.recentRandomFaces.length > 5) {
+                    this.recentRandomFaces.shift(); // Remove oldest
+                }
+
+                // Change to the random face
+                this.changeFace(randomIndex);
+                console.log(`Randomized to: ${this.faceConfigs[randomIndex].name}, recent: [${this.recentRandomFaces.map(i => this.faceConfigs[i].name).join(', ')}]`);
+            }
+
             drawAlignmentDebug(face, reference, faceLeft, faceTop, scale, scaledWidth, scaledHeight) {
                 // Clear previous debug visualization
                 this.cartoonElements.debugLayer.innerHTML = '';
+
+                // Only draw if debug mode is on
+                if (!this.showDebug) return;
 
                 // Draw bounding box for the current face image (scaled)
                 const imageBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -581,10 +673,11 @@
 
                 // Draw BLUE dots for reference face's anchor points (where current face should align to)
                 // Calculate where the reference face would be positioned
-                const REFERENCE_BOTTOM = 800;
-                const referenceBottomY = REFERENCE_BOTTOM - (reference.height - reference.bodyBottom);
+                const CANVAS_WIDTH = 800;
+                const CANVAS_HEIGHT = 500;
+                const referenceBottomY = CANVAS_HEIGHT - (reference.height - reference.bodyBottom);
                 const referenceTop = referenceBottomY - reference.height;
-                const referenceLeft = (1000 - reference.width) / 2;
+                const referenceLeft = (CANVAS_WIDTH - reference.width) / 2;
 
                 const refLeftAnchorX = referenceLeft + reference.leftAnchor[0];
                 const refLeftAnchorY = referenceTop + reference.leftAnchor[1];
@@ -609,24 +702,53 @@
                 refRightDot.setAttribute('stroke-width', '1');
                 this.cartoonElements.debugLayer.appendChild(refRightDot);
 
+                // Draw target frame (CYAN) - same for all faces since they're aligned and scaled
+                const refBodyBottomY = referenceTop + reference.bodyBottom;
+                const refTargetY = refBodyBottomY - reference.targetFrame.yTop_fromBodyBottom;
+                const refTargetFrame = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                refTargetFrame.setAttribute('x', referenceLeft + reference.targetFrame.x);
+                refTargetFrame.setAttribute('y', refTargetY);
+                refTargetFrame.setAttribute('width', reference.targetFrame.width);
+                refTargetFrame.setAttribute('height', reference.targetFrame.height);
+                refTargetFrame.setAttribute('fill', 'none');
+                refTargetFrame.setAttribute('stroke', 'cyan');
+                refTargetFrame.setAttribute('stroke-width', '2');
+                refTargetFrame.setAttribute('stroke-dasharray', '5,5');
+                this.cartoonElements.debugLayer.appendChild(refTargetFrame);
+
                 console.log(`Current face anchors (red): (${leftAnchorX},${leftAnchorY}) - (${rightAnchorX},${rightAnchorY})`);
                 console.log(`Reference anchors (blue): (${refLeftAnchorX},${refLeftAnchorY}) - (${refRightAnchorX},${refRightAnchorY})`);
+                console.log(`Target frame (cyan): (${referenceLeft + reference.targetFrame.x},${refTargetY})`);
             }
 
             updateTargetFrame(face) {
-                // Target frame in absolute 1000x1000 canvas coordinates
-                // Scale the target frame with the face
+                // Since all faces are aligned AND scaled to match the reference,
+                // the target frame is ALWAYS at the same canvas coordinates!
+                // Just use the reference face's target frame.
+                const reference = this.faceConfigs[0];
+
+                // Calculate reference position
+                const CANVAS_WIDTH = 800;
+                const CANVAS_HEIGHT = 500;
+                const targetBodyBottomY = CANVAS_HEIGHT - (reference.height - reference.bodyBottom);
+                const refTop = targetBodyBottomY - reference.bodyBottom;
+                const refLeft = (CANVAS_WIDTH - reference.width) / 2;
+
+                // Target frame is always at the same position
+                const refBodyBottomY = refTop + reference.bodyBottom;
+                const targetFrameY = refBodyBottomY - reference.targetFrame.yTop_fromBodyBottom;
+
                 this.targetFrame = {
-                    x: this.faceLeft + face.targetFrame.x * this.faceScale,
-                    y: this.faceTop + face.targetFrame.y * this.faceScale,
-                    width: face.targetFrame.width * this.faceScale,
-                    height: face.targetFrame.height * this.faceScale
+                    x: refLeft + reference.targetFrame.x,
+                    y: targetFrameY,
+                    width: reference.targetFrame.width,
+                    height: reference.targetFrame.height
                 };
 
-                // Store scale factor for smile image
-                this.imageScale = this.faceScale;
+                // Store scale factor for smile image (always 1.0 since we use reference dimensions)
+                this.imageScale = 1.0;
 
-                console.log('Updated target frame:', this.targetFrame);
+                console.log('Target frame (constant for all faces):', this.targetFrame);
             }
 
             analyzeImageElement(img, imagePath, faceId, faceName) {
@@ -643,6 +765,21 @@
                 const imageData = tempCtx.getImageData(0, 0, width, height);
                 const anchors = this.findBottomDarkPixels(imageData, width, height);
 
+                // Define target frame with absolute coordinates from bodyBottom line
+                // This ensures perfect alignment when faces are aligned at bodyBottom
+                const targetFrameTopLeft = {
+                    x: 110,
+                    y: 80,
+                    width: 110,
+                    height: 105
+                };
+
+                // Calculate Y coordinates relative to bodyBottom (positive = above bodyBottom)
+                const targetFrameTop_fromBodyBottom = anchors.bodyBottom - targetFrameTopLeft.y;
+                const targetFrameBottom_fromBodyBottom = anchors.bodyBottom - (targetFrameTopLeft.y + targetFrameTopLeft.height);
+
+                console.log(`${faceId} targetFrame: top=${targetFrameTop_fromBodyBottom}px above bodyBottom, bottom=${targetFrameBottom_fromBodyBottom}px above bodyBottom`);
+
                 this.faceConfigs.push({
                     id: faceId,
                     name: faceName,
@@ -653,10 +790,10 @@
                     leftAnchor: [anchors.leftX, anchors.leftY],
                     rightAnchor: [anchors.rightX, anchors.rightY],
                     targetFrame: {
-                        x: 110,
-                        y: 80,
-                        width: 110,
-                        height: 105
+                        x: targetFrameTopLeft.x,
+                        yTop_fromBodyBottom: targetFrameTop_fromBodyBottom,  // Pixels above bodyBottom to target frame top
+                        width: targetFrameTopLeft.width,
+                        height: targetFrameTopLeft.height
                     }
                 });
 
@@ -731,6 +868,7 @@
             setupEventListeners() {
                 document.getElementById('startBtn').addEventListener('click', () => this.start());
                 document.getElementById('stopBtn').addEventListener('click', () => this.stop());
+                document.getElementById('toggleDebug').addEventListener('click', () => this.toggleDebug());
 
                 // Feature toggles
                 ['showEyes', 'showMouth', 'showNose', 'showEars'].forEach(id => {
@@ -1057,6 +1195,18 @@
             }
             
             animateEyes(landmarks, faceBoundingBox, sensitivity) {
+                // Hardcode: Don't show eyes for face-9
+                const currentFace = this.faceConfigs[this.currentFaceIndex];
+                if (currentFace && currentFace.id === 'face-9') {
+                    this.cartoonElements.leftEye.style.display = 'none';
+                    this.cartoonElements.rightEye.style.display = 'none';
+                    return;
+                }
+
+                // Make sure eyes are visible for other faces
+                this.cartoonElements.leftEye.style.display = 'block';
+                this.cartoonElements.rightEye.style.display = 'block';
+
                 // Get eye landmarks
                 const leftEyeCenter = this.getEyeCenter(landmarks, 'left');
                 const rightEyeCenter = this.getEyeCenter(landmarks, 'right');
@@ -1121,6 +1271,14 @@
             }
             
             animateMouth(landmarks, faceBoundingBox, sensitivity) {
+                // Hardcode: Don't show mouth for faces 7 and 8
+                const currentFace = this.faceConfigs[this.currentFaceIndex];
+                if (currentFace && (currentFace.id === 'face-7' || currentFace.id === 'face-8')) {
+                    this.cartoonElements.mouthLayer.innerHTML = '';
+                    this.cartoonElements.smileImage.style.display = 'none';
+                    return;
+                }
+
                 // Use MediaPipe's inner lip landmarks for better accuracy
                 // These are the specific landmarks for the inner lip contour
                 const fullMouthIndices = [0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61, 185, 40, 39, 37, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82];
@@ -1197,7 +1355,13 @@
                     this.cartoonElements.smileImage.setAttribute('width', smileWidth);
                     this.cartoonElements.smileImage.setAttribute('height', smileHeight);
                     this.cartoonElements.smileImage.setAttribute('x', smoothedMouthCenter.x - smileWidth / 2 + yawOffset);
-                    this.cartoonElements.smileImage.setAttribute('y', smoothedMouthCenter.y - smileHeight / 2);
+
+                    // Adjust Y position for face-9 (move down by 10pts)
+                    let smileY = smoothedMouthCenter.y - smileHeight / 2;
+                    if (currentFace && currentFace.id === 'face-9') {
+                        smileY += 10;
+                    }
+                    this.cartoonElements.smileImage.setAttribute('y', smileY);
                     this.cartoonElements.smileImage.style.display = 'block';
 
                     // Re-append smile image to ensure it's in the DOM
@@ -1209,9 +1373,11 @@
 
                     // Second pass: scale points by 3x relative to center and apply yaw offset
                     const mouthScale = 3.0;
+                    // Adjust Y position for face-9 (move down by 10pts)
+                    const yAdjustment = (currentFace && currentFace.id === 'face-9') ? 10 : 0;
                     const scaledPoints = transformedPoints.map(point => ({
                         x: centerX + (point.x - centerX) * mouthScale + yawOffset,
-                        y: centerY + (point.y - centerY) * mouthScale
+                        y: centerY + (point.y - centerY) * mouthScale + yAdjustment
                     }));
 
                     // Create mouth path using scaled landmarks
