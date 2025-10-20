@@ -516,8 +516,85 @@
                 this.faceLeft = faceLeft;
                 this.faceTop = faceTop;
 
+                // Draw debug visualization
+                this.drawAlignmentDebug(face, reference, faceLeft, faceTop);
+
                 // Recalculate target frame based on this face's dimensions
                 this.updateTargetFrame(face);
+            }
+
+            drawAlignmentDebug(face, reference, faceLeft, faceTop) {
+                // Clear previous debug visualization
+                this.cartoonElements.debugLayer.innerHTML = '';
+
+                // Draw bounding box for the current face image
+                const imageBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                imageBox.setAttribute('x', faceLeft);
+                imageBox.setAttribute('y', faceTop);
+                imageBox.setAttribute('width', face.width);
+                imageBox.setAttribute('height', face.height);
+                imageBox.setAttribute('fill', 'none');
+                imageBox.setAttribute('stroke', 'yellow');
+                imageBox.setAttribute('stroke-width', '2');
+                imageBox.setAttribute('stroke-dasharray', '5,5');
+                this.cartoonElements.debugLayer.appendChild(imageBox);
+
+                // Draw RED dots for current face's anchor points
+                const leftAnchorX = faceLeft + face.leftAnchor[0];
+                const leftAnchorY = faceTop + face.leftAnchor[1];
+                const rightAnchorX = faceLeft + face.rightAnchor[0];
+                const rightAnchorY = faceTop + face.rightAnchor[1];
+
+                const leftDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                leftDot.setAttribute('cx', leftAnchorX);
+                leftDot.setAttribute('cy', leftAnchorY);
+                leftDot.setAttribute('r', '5');
+                leftDot.setAttribute('fill', 'red');
+                leftDot.setAttribute('stroke', 'white');
+                leftDot.setAttribute('stroke-width', '1');
+                this.cartoonElements.debugLayer.appendChild(leftDot);
+
+                const rightDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                rightDot.setAttribute('cx', rightAnchorX);
+                rightDot.setAttribute('cy', rightAnchorY);
+                rightDot.setAttribute('r', '5');
+                rightDot.setAttribute('fill', 'red');
+                rightDot.setAttribute('stroke', 'white');
+                rightDot.setAttribute('stroke-width', '1');
+                this.cartoonElements.debugLayer.appendChild(rightDot);
+
+                // Draw BLUE dots for reference face's anchor points (where current face should align to)
+                // Calculate where the reference face would be positioned
+                const REFERENCE_BOTTOM = 800;
+                const referenceBottomY = REFERENCE_BOTTOM - (reference.height - reference.bodyBottom);
+                const referenceTop = referenceBottomY - reference.height;
+                const referenceLeft = (1000 - reference.width) / 2;
+
+                const refLeftAnchorX = referenceLeft + reference.leftAnchor[0];
+                const refLeftAnchorY = referenceTop + reference.leftAnchor[1];
+                const refRightAnchorX = referenceLeft + reference.rightAnchor[0];
+                const refRightAnchorY = referenceTop + reference.rightAnchor[1];
+
+                const refLeftDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                refLeftDot.setAttribute('cx', refLeftAnchorX);
+                refLeftDot.setAttribute('cy', refLeftAnchorY);
+                refLeftDot.setAttribute('r', '5');
+                refLeftDot.setAttribute('fill', 'blue');
+                refLeftDot.setAttribute('stroke', 'white');
+                refLeftDot.setAttribute('stroke-width', '1');
+                this.cartoonElements.debugLayer.appendChild(refLeftDot);
+
+                const refRightDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                refRightDot.setAttribute('cx', refRightAnchorX);
+                refRightDot.setAttribute('cy', refRightAnchorY);
+                refRightDot.setAttribute('r', '5');
+                refRightDot.setAttribute('fill', 'blue');
+                refRightDot.setAttribute('stroke', 'white');
+                refRightDot.setAttribute('stroke-width', '1');
+                this.cartoonElements.debugLayer.appendChild(refRightDot);
+
+                console.log(`Current face anchors (red): (${leftAnchorX},${leftAnchorY}) - (${rightAnchorX},${rightAnchorY})`);
+                console.log(`Reference anchors (blue): (${refLeftAnchorX},${refLeftAnchorY}) - (${refRightAnchorX},${refRightAnchorY})`);
             }
 
             updateTargetFrame(face) {
