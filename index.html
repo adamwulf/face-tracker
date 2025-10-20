@@ -150,7 +150,7 @@
     <div class="cartoon-container">
         <h2>🎭 Animated Cartoon Face</h2>
         <div class="cartoon-wrapper">
-            <img id="cartoon-bg" src="facecam-1.png" alt="Cartoon Face Background" style="width: 400px; height: 400px; object-fit: cover;">
+            <img id="cartoon-bg" src="facecam-blank.png" alt="Cartoon Face Background" style="width: 400px; height: 400px; object-fit: cover;">
             <svg id="cartoon-svg" width="400" height="400" viewBox="0 0 400 400" style="position: absolute; top: 0; left: 0; pointer-events: none;">
                 <!-- Debug Layer - Bounding boxes -->
                 <g id="debug-layer">
@@ -166,6 +166,7 @@
                 <!-- Mouth Layer - Will use the same mesh as camera overlay -->
                 <g id="mouth-layer">
                     <!-- This will be populated with the same mouth landmarks as the camera -->
+                    <image id="smile-image" href="default-smile.png" x="0" y="0" width="80" height="80" style="display: none;"/>
                 </g>
             </svg>
         </div>
@@ -245,12 +246,20 @@
                     leftEye: document.getElementById('left-eye'),
                     rightEye: document.getElementById('right-eye'),
                     mouthLayer: document.getElementById('mouth-layer'),
-                    debugLayer: document.getElementById('debug-layer')
+                    debugLayer: document.getElementById('debug-layer'),
+                    smileImage: document.getElementById('smile-image')
                 };
-                
+
                 // Animation smoothing
                 this.smoothingFactor = 0.3;
                 this.lastPositions = {};
+
+                // Mouth closed timer for smile display
+                this.mouthClosedTimer = {
+                    closedStartTime: null,
+                    isShowingSmile: false
+                };
+                this.mouthClosedDelay = 500; // milliseconds
 
                 // Original PNG dimensions and rendered size
                 const originalPngWidth = 310;
@@ -286,6 +295,9 @@
                     width: originalTargetFrame.width * scale,
                     height: originalTargetFrame.height * scale
                 };
+
+                // Store scale factor for smile image
+                this.imageScale = scale;
 
                 // Blinking system - both eyes blink together
                 this.blinkImages = ['eye-blink-1.png', 'eye-blink-2.png'];
@@ -588,9 +600,6 @@
                 // Calculate face bounding box once per frame
                 const faceBoundingBox = this.calculateFaceBoundingBox(landmarks);
 
-                // Draw debug visualization
-                this.drawDebugBoxes(faceBoundingBox);
-
                 const intensity = parseFloat(document.getElementById('animationIntensity').value);
                 const eyeSensitivity = parseFloat(document.getElementById('eyeSensitivity').value);
                 const mouthSensitivity = parseFloat(document.getElementById('mouthSensitivity').value);
@@ -672,11 +681,20 @@
                     this.cartoonElements.rightEye.setAttribute('href', 'eye-right.png');
                 }
                 
-                // Update eye positions
-                this.cartoonElements.leftEye.setAttribute('x', leftPosition.x - 15);
-                this.cartoonElements.leftEye.setAttribute('y', leftPosition.y - 15);
-                this.cartoonElements.rightEye.setAttribute('x', rightPosition.x - 15);
-                this.cartoonElements.rightEye.setAttribute('y', rightPosition.y - 15);
+                // Update eye positions with 50% increased horizontal distance
+                const centerX = (leftPosition.x + rightPosition.x) / 2;
+                const eyeSpacingScale = 1.5; // Increase distance by 50%
+
+                const scaledLeftX = centerX - (centerX - leftPosition.x) * eyeSpacingScale;
+                const scaledRightX = centerX + (rightPosition.x - centerX) * eyeSpacingScale;
+
+                // Align eyes vertically by using average y position
+                const alignedY = (leftPosition.y + rightPosition.y) / 2;
+
+                this.cartoonElements.leftEye.setAttribute('x', scaledLeftX - 15);
+                this.cartoonElements.leftEye.setAttribute('y', alignedY - 15);
+                this.cartoonElements.rightEye.setAttribute('x', scaledRightX - 15);
+                this.cartoonElements.rightEye.setAttribute('y', alignedY - 15);
             }
             
             animateMouth(landmarks, faceBoundingBox, sensitivity) {
@@ -687,8 +705,41 @@
                 // Use only the inner lip landmarks (indices 20-39)
                 const mouthIndices = fullMouthIndices.slice(20, 40);
 
-                // Clear previous mouth path
-                this.cartoonElements.mouthLayer.innerHTML = '';
+                // Detect if mouth is closed by measuring vertical distance between upper and lower lips
+                // Upper lip center: landmark 13
+                // Lower lip center: landmark 14
+                const upperLip = landmarks[13];
+                const lowerLip = landmarks[14];
+                const mouthOpenDistance = Math.abs(lowerLip.y - upperLip.y);
+
+                // Threshold for closed mouth (normalized coordinates)
+                // Use stricter threshold to only detect truly closed mouths
+                const closedMouthThreshold = 0.01;
+                const isMouthClosed = mouthOpenDistance < closedMouthThreshold;
+
+                const now = Date.now();
+                const timer = this.mouthClosedTimer;
+
+                // Track mouth closed duration
+                if (isMouthClosed) {
+                    // Start timer if mouth just closed
+                    if (timer.closedStartTime === null) {
+                        timer.closedStartTime = now;
+                    }
+
+                    // Check if mouth has been closed long enough to show smile
+                    const closedDuration = now - timer.closedStartTime;
+                    if (closedDuration >= this.mouthClosedDelay && !timer.isShowingSmile) {
+                        timer.isShowingSmile = true;
+                    }
+                } else {
+                    // Mouth is open - reset timer and hide smile
+                    timer.closedStartTime = null;
+                    if (timer.isShowingSmile) {
+                        timer.isShowingSmile = false;
+                        this.cartoonElements.smileImage.style.display = 'none';
+                    }
+                }
 
                 // First pass: transform all landmarks and calculate center
                 const transformedPoints = [];
@@ -705,31 +756,57 @@
                 centerX /= transformedPoints.length;
                 centerY /= transformedPoints.length;
 
-                // Second pass: scale points by 2x relative to center
-                const mouthScale = 2.0;
-                const scaledPoints = transformedPoints.map(point => ({
-                    x: centerX + (point.x - centerX) * mouthScale,
-                    y: centerY + (point.y - centerY) * mouthScale
-                }));
+                // Show smile image or mouth outline based on state
+                if (timer.isShowingSmile) {
+                    // Hide mouth outline and show smile image centered at mouth position
+                    this.cartoonElements.mouthLayer.innerHTML = '';
 
-                // Create mouth path using scaled landmarks
-                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('stroke', '#333');
-                path.setAttribute('stroke-width', '3');
-                path.setAttribute('fill', 'none');
+                    // Scale smile image by the same factor as the background image
+                    const baseSmileSize = 80;
+                    const smileWidth = baseSmileSize * this.imageScale;
+                    const smileHeight = baseSmileSize * this.imageScale;
+                    this.cartoonElements.smileImage.setAttribute('width', smileWidth);
+                    this.cartoonElements.smileImage.setAttribute('height', smileHeight);
+                    this.cartoonElements.smileImage.setAttribute('x', centerX - smileWidth / 2);
+                    this.cartoonElements.smileImage.setAttribute('y', centerY - smileHeight / 2);
+                    this.cartoonElements.smileImage.style.display = 'block';
 
-                let pathData = '';
-                scaledPoints.forEach((point, i) => {
-                    if (i === 0) {
-                        pathData += `M${point.x} ${point.y}`;
-                    } else {
-                        pathData += ` L${point.x} ${point.y}`;
-                    }
-                });
-                pathData += ' Z'; // Close the path
+                    // Re-append smile image to ensure it's in the DOM
+                    this.cartoonElements.mouthLayer.appendChild(this.cartoonElements.smileImage);
+                } else {
+                    // Show mouth outline
+                    this.cartoonElements.smileImage.style.display = 'none';
+                    this.cartoonElements.mouthLayer.innerHTML = '';
 
-                path.setAttribute('d', pathData);
-                this.cartoonElements.mouthLayer.appendChild(path);
+                    // Second pass: scale points by 3x relative to center
+                    const mouthScale = 3.0;
+                    const scaledPoints = transformedPoints.map(point => ({
+                        x: centerX + (point.x - centerX) * mouthScale,
+                        y: centerY + (point.y - centerY) * mouthScale
+                    }));
+
+                    // Create mouth path using scaled landmarks
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('stroke', '#333');
+                    path.setAttribute('stroke-width', '6');
+                    path.setAttribute('fill', 'none');
+
+                    let pathData = '';
+                    scaledPoints.forEach((point, i) => {
+                        if (i === 0) {
+                            pathData += `M${point.x} ${point.y}`;
+                        } else {
+                            pathData += ` L${point.x} ${point.y}`;
+                        }
+                    });
+                    pathData += ' Z'; // Close the path
+
+                    path.setAttribute('d', pathData);
+                    this.cartoonElements.mouthLayer.appendChild(path);
+                }
+
+                // Store mouth closed state for use by other methods
+                this.isMouthClosed = isMouthClosed;
             }
             
             animateHeadRotation(landmarks, sensitivity) {
