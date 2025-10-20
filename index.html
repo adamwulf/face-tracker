@@ -188,6 +188,11 @@
             object-fit: contain;
             display: block;
         }
+
+        /* Prevent Dark Reader from modifying stroke colors */
+        [stroke] {
+            --darkreader-inline-stroke: #333 !important;
+        }
     </style>
 </head>
 <body>
@@ -1356,10 +1361,10 @@
                     this.cartoonElements.smileImage.setAttribute('height', smileHeight);
                     this.cartoonElements.smileImage.setAttribute('x', smoothedMouthCenter.x - smileWidth / 2 + yawOffset);
 
-                    // Adjust Y position for face-9 (move down by 10pts)
+                    // Adjust Y position for face-9 (move down by 12pts)
                     let smileY = smoothedMouthCenter.y - smileHeight / 2;
                     if (currentFace && currentFace.id === 'face-9') {
-                        smileY += 10;
+                        smileY += 12;
                     }
                     this.cartoonElements.smileImage.setAttribute('y', smileY);
                     this.cartoonElements.smileImage.style.display = 'block';
@@ -1373,8 +1378,8 @@
 
                     // Second pass: scale points by 3x relative to center and apply yaw offset
                     const mouthScale = 3.0;
-                    // Adjust Y position for face-9 (move down by 10pts)
-                    const yAdjustment = (currentFace && currentFace.id === 'face-9') ? 10 : 0;
+                    // Adjust Y position for face-9 (move down by 12pts)
+                    const yAdjustment = (currentFace && currentFace.id === 'face-9') ? 12 : 0;
                     const scaledPoints = transformedPoints.map(point => ({
                         x: centerX + (point.x - centerX) * mouthScale + yawOffset,
                         y: centerY + (point.y - centerY) * mouthScale + yAdjustment
@@ -1383,7 +1388,7 @@
                     // Create mouth path using scaled landmarks
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     path.setAttribute('stroke', '#333');
-                    path.setAttribute('stroke-width', '6');
+                    path.setAttribute('stroke-width', '4');
                     path.setAttribute('fill', 'none');
 
                     let pathData = '';
