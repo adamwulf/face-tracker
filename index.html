@@ -43,13 +43,16 @@
         }
 
         .container {
-            position: relative;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
             border: 2px solid #333;
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
-        
+
         #video {
             display: block;
             width: 80px;
@@ -116,8 +119,9 @@
         
         .cartoon-container {
             text-align: center;
+            position: relative;
         }
-        
+
         .cartoon-wrapper {
             position: relative;
             display: inline-block;
@@ -209,6 +213,115 @@
         [stroke] {
             --darkreader-inline-stroke: #333 !important;
         }
+
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .main-display {
+                flex-direction: column;
+                align-items: center;
+                width: 100%;
+            }
+
+            .container {
+                /* Keep camera overlay on top-left of cartoon */
+                top: 10px;
+                left: 10px;
+                width: auto;
+            }
+
+            #video {
+                width: 100px;
+                height: 75px;
+            }
+
+            .cartoon-container {
+                width: 100%;
+                margin-top: 0;
+            }
+
+            .cartoon-wrapper {
+                width: 100% !important;
+                max-width: calc(100vw - 20px) !important; /* Account for body padding */
+                height: auto !important;
+                aspect-ratio: 8/5;
+            }
+
+            .cartoon-wrapper img {
+                /* Ensure background image scales from top-left like SVG */
+                transform-origin: top left;
+            }
+
+            #cartoon-svg {
+                width: 100% !important;
+                height: 100% !important;
+            }
+
+            .controls {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            button {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .feature-toggle {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .animation-controls {
+                flex-direction: column;
+                width: 100%;
+                gap: 10px;
+            }
+
+            .slider-container {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .slider-container label {
+                min-width: 120px;
+            }
+
+            input[type="range"] {
+                flex: 1;
+            }
+
+            .face-buttons {
+                max-width: 100%;
+            }
+        }
+
+        /* Extra small devices */
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 20px;
+            }
+
+            .slider-container {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .slider-container label {
+                font-size: 12px;
+            }
+
+            input[type="range"] {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -218,12 +331,11 @@
     </div>
 
     <div class="main-display">
-        <div class="container">
-            <video id="video" autoplay muted playsinline></video>
-            <canvas id="canvas"></canvas>
-        </div>
-
         <div class="cartoon-container">
+            <div class="container">
+                <video id="video" autoplay muted playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
             <div class="cartoon-wrapper" id="cartoon-wrapper">
             <img id="cartoon-bg" src="facecam-blank.png" alt="Cartoon Face Background">
             <svg id="cartoon-svg" width="800" height="500" viewBox="0 0 800 500">
@@ -565,15 +677,23 @@
                 // Position horizontally so left anchor aligns
                 const faceLeft = targetLeftAnchorX - scaledLeftAnchorX;
 
-                // Update the background image and position
-                this.cartoonElements.background.src = face.image;
-                this.cartoonElements.background.style.width = `${scaledWidth}px`;
-                this.cartoonElements.background.style.height = `${scaledHeight}px`;
-                this.cartoonElements.background.style.left = `${faceLeft}px`;
-                this.cartoonElements.background.style.top = `${faceTop}px`;
-                this.cartoonElements.background.style.transform = 'scaleX(1)';
+                // Calculate percentage-based positions for responsive scaling
+                const leftPercent = (faceLeft / CANVAS_WIDTH) * 100;
+                const topPercent = (faceTop / CANVAS_HEIGHT) * 100;
+                const widthPercent = (scaledWidth / CANVAS_WIDTH) * 100;
+                const heightPercent = (scaledHeight / CANVAS_HEIGHT) * 100;
 
-                console.log(`Positioning: left=${faceLeft}, top=${faceTop}, size=${scaledWidth}x${scaledHeight}, scale=${scale.toFixed(3)}`);
+                // Update the background image and position using percentages
+                this.cartoonElements.background.src = face.image;
+                this.cartoonElements.background.style.width = `${widthPercent}%`;
+                this.cartoonElements.background.style.height = `${heightPercent}%`;
+                this.cartoonElements.background.style.left = `${leftPercent}%`;
+                this.cartoonElements.background.style.top = `${topPercent}%`;
+                this.cartoonElements.background.style.transform = 'none';
+                // Reset any flip state
+                this.cartoonElements.background.dataset.flipped = 'false';
+
+                console.log(`Positioning: left=${leftPercent}%, top=${topPercent}%, size=${widthPercent}%x${heightPercent}%, scale=${scale.toFixed(3)}`);
 
                 // Update active button styling
                 document.querySelectorAll('.face-button').forEach((btn, i) => {
@@ -769,10 +889,13 @@
                     height: reference.targetFrame.height
                 };
 
-                // Store scale factor for smile image (always 1.0 since we use reference dimensions)
+                // Smile image exists in SVG coordinate space (800x500 viewBox)
+                // It should be constant size regardless of which background face is showing
+                // Background images scale with percentages, but SVG uses fixed coordinates
                 this.imageScale = 1.0;
 
                 console.log('Target frame (constant for all faces):', this.targetFrame);
+                console.log('Image scale for smile (constant):', this.imageScale);
             }
 
             analyzeImageElement(img, imagePath, faceId, faceName) {
@@ -937,24 +1060,41 @@
             
             async start() {
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { width: 640, height: 480 } 
-                    });
-                    
+                    // Request front-facing camera explicitly for mobile compatibility
+                    const constraints = {
+                        video: {
+                            facingMode: 'user', // Front camera
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        }
+                    };
+
+                    console.log('Requesting camera with constraints:', constraints);
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
                     this.video.srcObject = stream;
+
+                    // Wait for video metadata to load to get actual dimensions
+                    await new Promise((resolve) => {
+                        this.video.onloadedmetadata = () => {
+                            console.log('Video dimensions:', this.video.videoWidth, 'x', this.video.videoHeight);
+                            resolve();
+                        };
+                    });
+
                     this.isRunning = true;
-                    
+
                     // Update button states
                     document.getElementById('startBtn').disabled = true;
                     document.getElementById('stopBtn').disabled = false;
                     document.getElementById('status').textContent = 'Camera started - detecting faces...';
-                    
+
                     // Start processing
                     this.processFrame();
-                    
+
                 } catch (error) {
                     console.error('Error accessing camera:', error);
-                    document.getElementById('status').textContent = 'Error: Could not access camera';
+                    document.getElementById('status').textContent = 'Error: Could not access camera - ' + error.message;
                 }
             }
             
@@ -987,17 +1127,30 @@
                 // Set canvas size to match video
                 this.canvas.width = this.video.videoWidth;
                 this.canvas.height = this.video.videoHeight;
-                
+
+                // Debug logging
+                if (!this.loggedCanvasSize) {
+                    console.log('Canvas size set to:', this.canvas.width, 'x', this.canvas.height);
+                    this.loggedCanvasSize = true;
+                }
+
                 // Clear canvas
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                
+
                 if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                    // Log first detection
+                    if (!this.loggedFirstDetection) {
+                        console.log('First face detected! Landmarks:', results.multiFaceLandmarks[0].length);
+                        console.log('Sample landmark (nose tip):', results.multiFaceLandmarks[0][1]);
+                        this.loggedFirstDetection = true;
+                    }
+
                     results.multiFaceLandmarks.forEach(landmarks => {
                         this.drawFaceFeatures(landmarks);
                         this.animateCartoon(landmarks); // Add cartoon animation
                     });
-                    
-                    document.getElementById('status').textContent = 
+
+                    document.getElementById('status').textContent =
                         `Detected ${results.multiFaceLandmarks.length} face(s) - Cartoon animated!`;
                 } else {
                     document.getElementById('status').textContent = 'No faces detected';
@@ -1303,6 +1456,17 @@
                     return;
                 }
 
+                // Debug: Log wrapper and SVG dimensions on first mouth animation
+                if (!this.loggedWrapperDimensions) {
+                    const wrapper = document.getElementById('cartoon-wrapper');
+                    const svg = document.getElementById('cartoon-svg');
+                    console.log('Wrapper dimensions:', wrapper.offsetWidth, 'x', wrapper.offsetHeight);
+                    console.log('SVG dimensions:', svg.offsetWidth, 'x', svg.offsetHeight);
+                    console.log('Target frame:', this.targetFrame);
+                    console.log('Face position:', {left: this.faceLeft, top: this.faceTop, scale: this.faceScale});
+                    this.loggedWrapperDimensions = true;
+                }
+
                 // Use MediaPipe's inner lip landmarks for better accuracy
                 // These are the specific landmarks for the inner lip contour
                 const fullMouthIndices = [0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61, 185, 40, 39, 37, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82];
@@ -1376,15 +1540,28 @@
                     const baseSmileSize = 80;
                     const smileWidth = baseSmileSize * this.imageScale;
                     const smileHeight = baseSmileSize * this.imageScale;
-                    this.cartoonElements.smileImage.setAttribute('width', smileWidth);
-                    this.cartoonElements.smileImage.setAttribute('height', smileHeight);
-                    this.cartoonElements.smileImage.setAttribute('x', smoothedMouthCenter.x - smileWidth / 2 + yawOffset);
+                    const smileX = smoothedMouthCenter.x - smileWidth / 2 + yawOffset;
 
                     // Adjust Y position for face-9 (move down by 12pts)
                     let smileY = smoothedMouthCenter.y - smileHeight / 2;
                     if (currentFace && currentFace.id === 'face-9') {
                         smileY += 12;
                     }
+
+                    // Debug: Log smile positioning on first show
+                    if (!this.loggedSmilePosition) {
+                        console.log('Smile positioning:', {
+                            mouthCenter: smoothedMouthCenter,
+                            imageScale: this.imageScale,
+                            smileSize: smileWidth + 'x' + smileHeight,
+                            position: {x: smileX, y: smileY}
+                        });
+                        this.loggedSmilePosition = true;
+                    }
+
+                    this.cartoonElements.smileImage.setAttribute('width', smileWidth);
+                    this.cartoonElements.smileImage.setAttribute('height', smileHeight);
+                    this.cartoonElements.smileImage.setAttribute('x', smileX);
                     this.cartoonElements.smileImage.setAttribute('y', smileY);
                     this.cartoonElements.smileImage.style.display = 'block';
 
@@ -1450,15 +1627,18 @@
                     cartoonSvg.style.transformOrigin = 'center center';
 
                     // Flip the background PNG based on head turn
-                    // Note: We don't use transform for flipping because we're using width/height CSS for scaling
+                    // Simpler approach: use transform-origin to control flip anchor point
                     const backgroundImg = document.getElementById('cartoon-bg');
+                    const shouldFlip = yaw < -1;
 
-                    if (yaw < -1) {
-                        // Turned left - flip horizontally
+                    if (shouldFlip) {
+                        // Turned left - flip horizontally around the center
                         backgroundImg.style.transform = 'scaleX(-1)';
+                        backgroundImg.style.transformOrigin = 'center center';
                     } else {
                         // Normal orientation
                         backgroundImg.style.transform = 'scaleX(1)';
+                        backgroundImg.style.transformOrigin = 'center center';
                     }
                 }
             }
