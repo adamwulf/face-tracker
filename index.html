@@ -672,15 +672,21 @@
                 // Position horizontally so left anchor aligns
                 const faceLeft = targetLeftAnchorX - scaledLeftAnchorX;
 
-                // Update the background image and position
+                // Calculate percentage-based positions for responsive scaling
+                const leftPercent = (faceLeft / CANVAS_WIDTH) * 100;
+                const topPercent = (faceTop / CANVAS_HEIGHT) * 100;
+                const widthPercent = (scaledWidth / CANVAS_WIDTH) * 100;
+                const heightPercent = (scaledHeight / CANVAS_HEIGHT) * 100;
+
+                // Update the background image and position using percentages
                 this.cartoonElements.background.src = face.image;
-                this.cartoonElements.background.style.width = `${scaledWidth}px`;
-                this.cartoonElements.background.style.height = `${scaledHeight}px`;
-                this.cartoonElements.background.style.left = `${faceLeft}px`;
-                this.cartoonElements.background.style.top = `${faceTop}px`;
+                this.cartoonElements.background.style.width = `${widthPercent}%`;
+                this.cartoonElements.background.style.height = `${heightPercent}%`;
+                this.cartoonElements.background.style.left = `${leftPercent}%`;
+                this.cartoonElements.background.style.top = `${topPercent}%`;
                 this.cartoonElements.background.style.transform = 'scaleX(1)';
 
-                console.log(`Positioning: left=${faceLeft}, top=${faceTop}, size=${scaledWidth}x${scaledHeight}, scale=${scale.toFixed(3)}`);
+                console.log(`Positioning: left=${leftPercent}%, top=${topPercent}%, size=${widthPercent}%x${heightPercent}%, scale=${scale.toFixed(3)}`);
 
                 // Update active button styling
                 document.querySelectorAll('.face-button').forEach((btn, i) => {
