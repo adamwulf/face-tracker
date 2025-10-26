@@ -249,9 +249,14 @@
 
             .cartoon-wrapper {
                 width: 100% !important;
-                max-width: 100vw !important;
+                max-width: calc(100vw - 20px) !important; /* Account for body padding */
                 height: auto !important;
                 aspect-ratio: 8/5;
+            }
+
+            .cartoon-wrapper img {
+                /* Ensure background image scales from top-left like SVG */
+                transform-origin: top left;
             }
 
             #cartoon-svg {
@@ -882,10 +887,12 @@
                     height: reference.targetFrame.height
                 };
 
-                // Store scale factor for smile image (always 1.0 since we use reference dimensions)
-                this.imageScale = 1.0;
+                // Store scale factor for smile image - use the stored faceScale
+                // This ensures smile size matches the face scaling
+                this.imageScale = this.faceScale || 1.0;
 
                 console.log('Target frame (constant for all faces):', this.targetFrame);
+                console.log('Image scale for smile:', this.imageScale);
             }
 
             analyzeImageElement(img, imagePath, faceId, faceName) {
@@ -1446,6 +1453,17 @@
                     return;
                 }
 
+                // Debug: Log wrapper and SVG dimensions on first mouth animation
+                if (!this.loggedWrapperDimensions) {
+                    const wrapper = document.getElementById('cartoon-wrapper');
+                    const svg = document.getElementById('cartoon-svg');
+                    console.log('Wrapper dimensions:', wrapper.offsetWidth, 'x', wrapper.offsetHeight);
+                    console.log('SVG dimensions:', svg.offsetWidth, 'x', svg.offsetHeight);
+                    console.log('Target frame:', this.targetFrame);
+                    console.log('Face position:', {left: this.faceLeft, top: this.faceTop, scale: this.faceScale});
+                    this.loggedWrapperDimensions = true;
+                }
+
                 // Use MediaPipe's inner lip landmarks for better accuracy
                 // These are the specific landmarks for the inner lip contour
                 const fullMouthIndices = [0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61, 185, 40, 39, 37, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82];
@@ -1519,15 +1537,28 @@
                     const baseSmileSize = 80;
                     const smileWidth = baseSmileSize * this.imageScale;
                     const smileHeight = baseSmileSize * this.imageScale;
-                    this.cartoonElements.smileImage.setAttribute('width', smileWidth);
-                    this.cartoonElements.smileImage.setAttribute('height', smileHeight);
-                    this.cartoonElements.smileImage.setAttribute('x', smoothedMouthCenter.x - smileWidth / 2 + yawOffset);
+                    const smileX = smoothedMouthCenter.x - smileWidth / 2 + yawOffset;
 
                     // Adjust Y position for face-9 (move down by 12pts)
                     let smileY = smoothedMouthCenter.y - smileHeight / 2;
                     if (currentFace && currentFace.id === 'face-9') {
                         smileY += 12;
                     }
+
+                    // Debug: Log smile positioning on first show
+                    if (!this.loggedSmilePosition) {
+                        console.log('Smile positioning:', {
+                            mouthCenter: smoothedMouthCenter,
+                            imageScale: this.imageScale,
+                            smileSize: smileWidth + 'x' + smileHeight,
+                            position: {x: smileX, y: smileY}
+                        });
+                        this.loggedSmilePosition = true;
+                    }
+
+                    this.cartoonElements.smileImage.setAttribute('width', smileWidth);
+                    this.cartoonElements.smileImage.setAttribute('height', smileHeight);
+                    this.cartoonElements.smileImage.setAttribute('x', smileX);
                     this.cartoonElements.smileImage.setAttribute('y', smileY);
                     this.cartoonElements.smileImage.style.display = 'block';
 
