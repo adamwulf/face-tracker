@@ -689,8 +689,9 @@
                 this.cartoonElements.background.style.height = `${heightPercent}%`;
                 this.cartoonElements.background.style.left = `${leftPercent}%`;
                 this.cartoonElements.background.style.top = `${topPercent}%`;
-                this.cartoonElements.background.style.transform = 'scaleX(1)';
-                this.cartoonElements.background.style.transformOrigin = 'top left';
+                this.cartoonElements.background.style.transform = 'none';
+                // Reset any flip state
+                this.cartoonElements.background.dataset.flipped = 'false';
 
                 console.log(`Positioning: left=${leftPercent}%, top=${topPercent}%, size=${widthPercent}%x${heightPercent}%, scale=${scale.toFixed(3)}`);
 
@@ -1625,15 +1626,18 @@
                     cartoonSvg.style.transformOrigin = 'center center';
 
                     // Flip the background PNG based on head turn
-                    // Note: We don't use transform for flipping because we're using width/height CSS for scaling
+                    // Simpler approach: use transform-origin to control flip anchor point
                     const backgroundImg = document.getElementById('cartoon-bg');
+                    const shouldFlip = yaw < -1;
 
-                    if (yaw < -1) {
-                        // Turned left - flip horizontally
+                    if (shouldFlip) {
+                        // Turned left - flip horizontally around the center
                         backgroundImg.style.transform = 'scaleX(-1)';
+                        backgroundImg.style.transformOrigin = 'center center';
                     } else {
                         // Normal orientation
                         backgroundImg.style.transform = 'scaleX(1)';
+                        backgroundImg.style.transformOrigin = 'center center';
                     }
                 }
             }
