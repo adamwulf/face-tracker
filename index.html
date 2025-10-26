@@ -889,12 +889,13 @@
                     height: reference.targetFrame.height
                 };
 
-                // Store scale factor for smile image - use the stored faceScale
-                // This ensures smile size matches the face scaling
-                this.imageScale = this.faceScale || 1.0;
+                // Smile image exists in SVG coordinate space (800x500 viewBox)
+                // It should be constant size regardless of which background face is showing
+                // Background images scale with percentages, but SVG uses fixed coordinates
+                this.imageScale = 1.0;
 
                 console.log('Target frame (constant for all faces):', this.targetFrame);
-                console.log('Image scale for smile:', this.imageScale);
+                console.log('Image scale for smile (constant):', this.imageScale);
             }
 
             analyzeImageElement(img, imagePath, faceId, faceName) {
